@@ -167,9 +167,9 @@
     <section class="screen" id="screen-player">
       <!-- ממתין -->
       <div id="player-wait" class="centered">
-        <div class="big-emoji">⏳</div>
+        <div class="big-emoji" id="player-wait-emoji">⏳</div>
         <h2 id="player-name-hi">מחכים למנחה…</h2>
-        <p class="muted">המנחה יתחיל את המשחק בקרוב. השאירו את המסך פתוח.</p>
+        <p class="muted" id="player-wait-sub">המנחה יתחיל את המשחק בקרוב. השאירו את המסך פתוח.</p>
         <div class="mini-players" id="player-lobby-list"></div>
       </div>
 
@@ -211,6 +211,8 @@
     </section>
 
   </div>
+
+  <button id="btn-exit" class="exit-btn hidden" title="יציאה מהמשחק">✕</button>
 
   <div id="toast" class="toast"></div>
 

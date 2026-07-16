@@ -38,6 +38,8 @@
   function showScreen(id) {
     $$('.screen').forEach((s) => s.classList.remove('active'));
     el(id).classList.add('active');
+    // כפתור יציאה מוצג רק בתוך משחק
+    el('btn-exit').classList.toggle('hidden', id === 'screen-home' || id === 'screen-create');
     window.scrollTo(0, 0);
   }
 
@@ -49,6 +51,13 @@
   function clearSession() {
     try { localStorage.removeItem(SESSION_KEY); } catch (_) {}
   }
+
+  // ---------- יציאה ----------
+  el('btn-exit').addEventListener('click', () => {
+    if (!confirm('לצאת מהמשחק?')) return;
+    clearSession();
+    location.href = '/';
+  });
 
   // ---------- בית ----------
   el('btn-goto-create').addEventListener('click', () => {
@@ -240,13 +249,14 @@
 
   function renderHostVote() {
     const p = S.pub;
-    const voted = p.players.filter((x) => x.hasVoted).length;
-    const total = p.players.filter((x) => x.connected).length;
+    const roundPlayers = p.players.filter((x) => x.inRound !== false);
+    const voted = roundPlayers.filter((x) => x.hasVoted).length;
+    const total = roundPlayers.filter((x) => x.connected).length;
     el('host-vote-text').textContent = `${voted} / ${total} הצביעו`;
     el('host-vote-fill').style.width = total ? `${(voted / total) * 100}%` : '0%';
     const grid = el('host-vote-players');
     grid.innerHTML = '';
-    for (const pl of p.players) grid.appendChild(playerChip(pl, false));
+    for (const pl of roundPlayers) grid.appendChild(playerChip(pl, false));
 
     // הצבעת המנחה עצמו (אם משתתף)
     const selfBox = el('host-vote-self');
@@ -257,6 +267,7 @@
       list.innerHTML = '';
       for (const pl of p.players) {
         if (pl.id === S.myId) continue;
+        if (pl.inRound === false) continue;
         const b = document.createElement('button');
         b.innerHTML = `<span>${avatarFor(pl.id)}</span><span>${escapeHtml(pl.name)}</span>`;
         if (S.selectedVote === pl.id) b.classList.add('selected');
@@ -331,23 +342,34 @@
   function renderPlayer() {
     const p = S.pub; if (!p) return;
     const phase = p.phase;
-    const iVoted = !!p.players.find((x) => x.id === S.myId)?.hasVoted;
+    const me = p.players.find((x) => x.id === S.myId);
+    const iVoted = !!me?.hasVoted;
+    // מצטרף מאוחר: לא משתתף בסבב הנוכחי — ממתין לסבב הבא
+    const waiting = (phase === 'reveal' || phase === 'vote') && me && me.inRound === false;
     showSub('screen-player', {
-      'player-wait': phase === 'lobby',
-      'player-role': phase === 'reveal',
-      'player-vote': phase === 'vote',
+      'player-wait': phase === 'lobby' || waiting,
+      'player-role': phase === 'reveal' && !waiting,
+      'player-vote': phase === 'vote' && !waiting,
       'player-results': phase === 'results',
       'player-kicked': false,
     });
-    if (phase === 'lobby') renderPlayerWait();
+    if (phase === 'lobby' || waiting) renderPlayerWait(waiting);
     else if (phase === 'reveal') renderPlayerRole();
     else if (phase === 'vote') renderPlayerVote(iVoted);
     else if (phase === 'results') renderPlayerResults();
   }
 
-  function renderPlayerWait() {
+  function renderPlayerWait(waiting) {
     const me = S.pub.players.find((x) => x.id === S.myId);
-    el('player-name-hi').textContent = me ? `${avatarFor(me.id)} שלום ${me.name}!` : 'מחכים למנחה…';
+    if (waiting) {
+      el('player-wait-emoji').textContent = '🍿';
+      el('player-name-hi').textContent = me ? `${avatarFor(me.id)} ${me.name}, הצטרפת!` : 'הצטרפת!';
+      el('player-wait-sub').textContent = 'הסבב הנוכחי כבר באמצע — תיכנסו למשחק בסבב הבא.';
+    } else {
+      el('player-wait-emoji').textContent = '⏳';
+      el('player-name-hi').textContent = me ? `${avatarFor(me.id)} שלום ${me.name}!` : 'מחכים למנחה…';
+      el('player-wait-sub').textContent = 'המנחה יתחיל את המשחק בקרוב. השאירו את המסך פתוח.';
+    }
     const list = el('player-lobby-list');
     list.innerHTML = '';
     for (const pl of S.pub.players) {
@@ -390,6 +412,7 @@
     list.innerHTML = '';
     for (const pl of S.pub.players) {
       if (pl.id === S.myId) continue; // אי אפשר להצביע לעצמך
+      if (pl.inRound === false) continue; // מצטרפים מאוחרים לא בסבב הזה
       const b = document.createElement('button');
       b.innerHTML = `<span>${avatarFor(pl.id)}</span><span>${escapeHtml(pl.name)}</span>`;
       if (S.selectedVote === pl.id) b.classList.add('selected');
@@ -406,16 +429,22 @@
 
   function renderPlayerResults() {
     const r = S.pub.results; if (!r) return;
+    const me = S.pub.players.find((x) => x.id === S.myId);
     const amImposter = r.imposterIds.includes(S.myId);
     const won = (r.outcome === 'crew') ? !amImposter : amImposter;
-    el('player-result-emoji').textContent = won ? '🎉' : '😅';
-    el('player-result-title').textContent = won ? 'ניצחת בסבב!' : 'הפסדת בסבב הזה';
+    if (me && me.inRound === false) {
+      // הצטרף באמצע הסבב — לא ניצח ולא הפסיד
+      el('player-result-emoji').textContent = '👀';
+      el('player-result-title').textContent = 'הסבב הסתיים — אתם בפנים בסבב הבא!';
+    } else {
+      el('player-result-emoji').textContent = won ? '🎉' : '😅';
+      el('player-result-title').textContent = won ? 'ניצחת בסבב!' : 'הפסדת בסבב הזה';
+    }
     el('player-word').textContent = r.word;
     const byId = Object.fromEntries(S.pub.players.map((x) => [x.id, x]));
     const impNames = r.imposterIds.map((id) => byId[id]?.name || '?').join(', ');
     el('player-imposter-reveal').innerHTML = `המתחזה${r.imposterIds.length > 1 ? 'ים' : ''}: <span class="imp">${impNames}</span>` +
       (amImposter ? ' <b>(זה אתה!)</b>' : '');
-    const me = S.pub.players.find((x) => x.id === S.myId);
     el('player-my-score').textContent = me ? `הניקוד שלך: ${me.score}` : '';
   }
 
@@ -465,6 +494,8 @@
     let sess = null;
     try { sess = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch (_) {}
     if (!sess?.code) return;
+    // הגיעו מלינק הצטרפות לחדר אחר — הלינק מנצח, לא משחזרים סשן ישן
+    if (S.urlCode && sess.code !== S.urlCode) return;
     doReconnect(sess);
   }
 
@@ -473,17 +504,27 @@
     doReconnect({ role: S.role, code: S.code, token: S.token });
   }
 
+  function sessionDead() {
+    clearSession();
+    // אם היינו באמצע משחק על המסך — חוזרים הביתה עם הסבר
+    if (S.role) {
+      toast('החדר כבר לא קיים — פתחו משחק חדש');
+      S.role = null; S.code = null; S.token = null; S.myId = null; S.pub = null;
+      showScreen('screen-home');
+    }
+  }
+
   function doReconnect(sess) {
     if (sess.role === 'host') {
       socket.emit('host:reconnect', { code: sess.code, hostToken: sess.token }, (res) => {
-        if (!res?.ok) { clearSession(); return; }
+        if (!res?.ok) { sessionDead(); return; }
         S.role = 'host'; S.code = res.code; S.token = sess.token; S.pub = res.state;
         S.myId = res.hostPlayerId || null;
         showScreen('screen-host'); renderHost();
       });
     } else if (sess.role === 'player') {
       socket.emit('player:reconnect', { code: sess.code, playerId: sess.token }, (res) => {
-        if (!res?.ok) { clearSession(); return; }
+        if (!res?.ok) { sessionDead(); return; }
         S.role = 'player'; S.code = res.code; S.token = res.playerId; S.myId = res.playerId; S.pub = res.state;
         showScreen('screen-player'); renderPlayer();
       });
@@ -495,7 +536,9 @@
     const params = new URLSearchParams(location.search);
     const c = params.get('c') || params.get('code');
     if (c) {
-      el('join-code').value = c.toUpperCase();
+      // לינק הצטרפות: שומרים את הקוד כדי שלא ישוחזר סשן ישן של חדר אחר
+      S.urlCode = c.toUpperCase();
+      el('join-code').value = S.urlCode;
       setTimeout(() => el('join-name').focus(), 300);
     }
   }
