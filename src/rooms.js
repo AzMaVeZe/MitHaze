@@ -1,0 +1,290 @@
+// ניהול חדרים ולוגיקת המשחק "מתחזה".
+// כל חדר מזוהה בקוד קצר. לשחקנים יש מזהה קבוע (playerId) כדי לאפשר התחברות מחדש.
+
+import { pickWord } from '../data/words.js';
+
+const rooms = new Map();
+
+const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // ללא תווים מבלבלים (O/0, I/1)
+const MIN_PLAYERS = 3;
+
+function genCode() {
+  let code;
+  do {
+    code = '';
+    for (let i = 0; i < 4; i++) {
+      code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+    }
+  } while (rooms.has(code));
+  return code;
+}
+
+function genId() {
+  return (
+    Math.random().toString(36).slice(2, 10) +
+    Math.random().toString(36).slice(2, 10)
+  );
+}
+
+export function createRoom(settings = {}) {
+  const code = genCode();
+  const room = {
+    code,
+    createdAt: Date.now(),
+    hostToken: genId(),
+    hostSocketId: null,
+    phase: 'lobby', // lobby | reveal | vote | results
+    settings: {
+      imposterCount: clampInt(settings.imposterCount, 1, 3, 1),
+      categoryId: settings.categoryId || 'all',
+      imposterSeesCategory: settings.imposterSeesCategory !== false,
+    },
+    players: new Map(), // playerId -> player
+    round: null,
+  };
+  rooms.set(code, room);
+  return room;
+}
+
+export function getRoom(code) {
+  if (!code) return null;
+  return rooms.get(String(code).toUpperCase()) || null;
+}
+
+function clampInt(v, min, max, dflt) {
+  const n = parseInt(v, 10);
+  if (Number.isNaN(n)) return dflt;
+  return Math.max(min, Math.min(max, n));
+}
+
+export function addPlayer(room, name, socketId) {
+  const playerId = genId();
+  const player = {
+    id: playerId,
+    name: String(name || '').trim().slice(0, 20) || 'שחקן',
+    socketId,
+    connected: true,
+    isHost: false,
+    isImposter: false,
+    hasVoted: false,
+    votedFor: null,
+    score: 0,
+  };
+  room.players.set(playerId, player);
+  return player;
+}
+
+export function reconnectPlayer(room, playerId, socketId) {
+  const player = room.players.get(playerId);
+  if (!player) return null;
+  player.socketId = socketId;
+  player.connected = true;
+  return player;
+}
+
+export function markDisconnected(socketId) {
+  for (const room of rooms.values()) {
+    if (room.hostSocketId === socketId) {
+      room.hostSocketId = null;
+    }
+    for (const p of room.players.values()) {
+      if (p.socketId === socketId) {
+        p.connected = false;
+        p.socketId = null;
+        return { room, player: p };
+      }
+    }
+  }
+  return null;
+}
+
+export function connectedPlayers(room) {
+  return [...room.players.values()].filter((p) => p.connected);
+}
+
+export function canStart(room) {
+  const active = connectedPlayers(room);
+  return active.length >= MIN_PLAYERS && active.length > room.settings.imposterCount;
+}
+
+// מתחיל סבב חדש: בוחר מילה, מגריל מתחזים ומאפס הצבעות.
+export function startRound(room) {
+  const active = connectedPlayers(room);
+  const { word, categoryName, emoji } = pickWord(room.settings.categoryId);
+
+  // הגרלת מתחזים
+  const shuffled = [...active].sort(() => Math.random() - 0.5);
+  const imposterCount = Math.min(room.settings.imposterCount, active.length - 1);
+  const imposterIds = new Set(shuffled.slice(0, imposterCount).map((p) => p.id));
+
+  for (const p of room.players.values()) {
+    p.isImposter = imposterIds.has(p.id);
+    p.hasVoted = false;
+    p.votedFor = null;
+  }
+
+  // סדר תורים אקראי למתן רמזים
+  const order = [...active].sort(() => Math.random() - 0.5).map((p) => p.id);
+
+  room.round = {
+    word,
+    categoryName,
+    emoji,
+    imposterIds: [...imposterIds],
+    order,
+    startingPlayerId: order[0],
+    votes: {}, // voterId -> targetId
+    results: null,
+  };
+  room.phase = 'reveal';
+  return room.round;
+}
+
+export function beginVoting(room) {
+  if (!room.round) return;
+  room.phase = 'vote';
+}
+
+export function castVote(room, voterId, targetId) {
+  if (room.phase !== 'vote' || !room.round) return false;
+  const voter = room.players.get(voterId);
+  const target = room.players.get(targetId);
+  if (!voter || !target || !voter.connected) return false;
+  room.round.votes[voterId] = targetId;
+  voter.hasVoted = true;
+  voter.votedFor = targetId;
+  return true;
+}
+
+export function allVoted(room) {
+  const active = connectedPlayers(room);
+  return active.length > 0 && active.every((p) => p.hasVoted);
+}
+
+// מסכם את הסבב: סופר קולות, מכריע מי הודח, מעדכן ניקוד.
+export function tallyResults(room) {
+  const { votes, imposterIds } = room.round;
+  const counts = {};
+  for (const targetId of Object.values(votes)) {
+    counts[targetId] = (counts[targetId] || 0) + 1;
+  }
+
+  // מציאת המקסימום
+  let max = 0;
+  for (const c of Object.values(counts)) max = Math.max(max, c);
+  const topVoted = Object.keys(counts).filter((id) => counts[id] === max);
+  const isTie = topVoted.length !== 1;
+  const ejectedId = isTie ? null : topVoted[0];
+  const imposterSet = new Set(imposterIds);
+  const crewCaughtImposter = ejectedId && imposterSet.has(ejectedId);
+
+  // ניקוד:
+  // - צוות שמצביע נכון (למתחזה) מקבל +1
+  // - כל מתחזה ששרד (לא הודח יחיד) מקבל +2
+  for (const [voterId, targetId] of Object.entries(votes)) {
+    const voter = room.players.get(voterId);
+    if (voter && !voter.isImposter && imposterSet.has(targetId)) {
+      voter.score += 1;
+    }
+  }
+  for (const impId of imposterIds) {
+    const imp = room.players.get(impId);
+    if (imp && impId !== ejectedId) imp.score += 2;
+  }
+
+  const results = {
+    word: room.round.word,
+    categoryName: room.round.categoryName,
+    emoji: room.round.emoji,
+    counts,
+    ejectedId,
+    isTie,
+    imposterIds,
+    crewCaughtImposter,
+    outcome: crewCaughtImposter ? 'crew' : 'imposter',
+  };
+  room.round.results = results;
+  room.phase = 'results';
+  return results;
+}
+
+export function resetToLobby(room) {
+  room.phase = 'lobby';
+  room.round = null;
+  for (const p of room.players.values()) {
+    p.isImposter = false;
+    p.hasVoted = false;
+    p.votedFor = null;
+  }
+}
+
+export function removePlayer(room, playerId) {
+  room.players.delete(playerId);
+}
+
+export function deleteRoom(code) {
+  rooms.delete(code);
+}
+
+// ניקוי חדרים ישנים (מעל 6 שעות) כדי לא לצבור זיכרון.
+export function cleanupRooms() {
+  const now = Date.now();
+  const SIX_HOURS = 6 * 60 * 60 * 1000;
+  for (const [code, room] of rooms.entries()) {
+    if (now - room.createdAt > SIX_HOURS) rooms.delete(code);
+  }
+}
+
+// ייצוג ציבורי של החדר (ללא מידע סודי כמו מילה/זהות מתחזה בזמן משחק).
+export function publicState(room) {
+  const players = [...room.players.values()].map((p) => ({
+    id: p.id,
+    name: p.name,
+    connected: p.connected,
+    hasVoted: p.hasVoted,
+    score: p.score,
+  }));
+  const state = {
+    code: room.code,
+    phase: room.phase,
+    settings: room.settings,
+    players,
+    minPlayers: MIN_PLAYERS,
+    canStart: canStart(room),
+  };
+  if (room.round) {
+    state.round = {
+      categoryName: room.settings.imposterSeesCategory ? room.round.categoryName : null,
+      emoji: room.round.emoji,
+      order: room.round.order,
+      startingPlayerId: room.round.startingPlayerId,
+    };
+  }
+  // בשלב התוצאות חושפים הכול
+  if (room.phase === 'results' && room.round?.results) {
+    state.results = room.round.results;
+  }
+  return state;
+}
+
+// מידע פרטי לשחקן ספציפי (התפקיד שלו).
+export function privateRole(room, playerId) {
+  const player = room.players.get(playerId);
+  if (!player || !room.round) return null;
+  if (player.isImposter) {
+    return {
+      isImposter: true,
+      word: null,
+      categoryName: room.settings.imposterSeesCategory ? room.round.categoryName : null,
+      emoji: room.round.emoji,
+    };
+  }
+  return {
+    isImposter: false,
+    word: room.round.word,
+    categoryName: room.round.categoryName,
+    emoji: room.round.emoji,
+  };
+}
+
+export { MIN_PLAYERS };

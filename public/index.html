@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#1a1333" />
+  <title>מתחזה 🎭 — משחק מסיבה מרובה משתתפים</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="/css/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎭</text></svg>" />
+</head>
+<body>
+  <div id="app">
+
+    <!-- מסך בית -->
+    <section class="screen active" id="screen-home">
+      <div class="hero">
+        <div class="logo">🎭</div>
+        <h1>מתחזה</h1>
+        <p class="tagline">משחק המסיבה — כולם מצטרפים מהטלפון שלהם. אין צורך להעביר מכשיר!</p>
+      </div>
+      <div class="card stack">
+        <button class="btn btn-primary btn-lg" id="btn-goto-create">
+          🎮 פתח משחק חדש
+        </button>
+        <div class="divider"><span>או</span></div>
+        <form id="form-join" class="stack" autocomplete="off">
+          <input class="input input-code" id="join-code" placeholder="קוד משחק" maxlength="4" inputmode="text" />
+          <input class="input" id="join-name" placeholder="השם שלך" maxlength="20" />
+          <button class="btn btn-secondary btn-lg" type="submit">🚪 הצטרף למשחק</button>
+        </form>
+      </div>
+      <p class="foot-note">בונים חבורה, מגלים מי המתחזה שלא יודע את המילה הסודית.</p>
+    </section>
+
+    <!-- מסך יצירת משחק (הגדרות) -->
+    <section class="screen" id="screen-create">
+      <div class="card stack">
+        <h2>הגדרות המשחק</h2>
+        <label class="field">
+          <span>קטגוריה</span>
+          <select class="input" id="set-category">
+            <option value="all">הכול מעורבב 🎲</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>מספר מתחזים</span>
+          <div class="segmented" id="set-imposters">
+            <button type="button" data-val="1" class="active">1</button>
+            <button type="button" data-val="2">2</button>
+            <button type="button" data-val="3">3</button>
+          </div>
+        </label>
+        <label class="switch-row">
+          <span>המתחזה רואה את הקטגוריה</span>
+          <input type="checkbox" id="set-seescat" checked />
+          <span class="switch"></span>
+        </label>
+        <button class="btn btn-primary btn-lg" id="btn-create">צור חדר →</button>
+        <button class="btn btn-ghost" id="btn-create-back">חזרה</button>
+      </div>
+    </section>
+
+    <!-- מסך מנחה (מסך משותף) -->
+    <section class="screen" id="screen-host">
+      <!-- לובי -->
+      <div id="host-lobby">
+        <div class="host-topbar">
+          <div class="join-info">
+            <div class="join-label">היכנסו לכתובת</div>
+            <div class="join-url" id="host-url">—</div>
+            <div class="join-label">והקישו קוד</div>
+            <div class="room-code" id="host-code">····</div>
+          </div>
+          <div class="qr-box">
+            <img id="host-qr" alt="QR להצטרפות" />
+            <span class="qr-hint">סרקו כדי להצטרף</span>
+          </div>
+        </div>
+
+        <div class="players-panel">
+          <div class="players-head">
+            <h3>שחקנים <span class="pill" id="host-player-count">0</span></h3>
+            <span class="hint" id="host-start-hint"></span>
+          </div>
+          <ul class="players-grid" id="host-players"></ul>
+        </div>
+
+        <div class="host-actions">
+          <button class="btn btn-primary btn-lg" id="btn-host-start" disabled>▶️ התחל משחק</button>
+        </div>
+      </div>
+
+      <!-- שלב חשיפת תפקידים -->
+      <div id="host-reveal" class="hidden centered">
+        <div class="phase-badge">שלב הרמזים</div>
+        <div class="big-emoji" id="host-reveal-emoji">🎭</div>
+        <h2>כולם קיבלו תפקיד</h2>
+        <p class="muted">כל אחד רואה במכשיר שלו אם הוא יודע את המילה הסודית — או שהוא <b>המתחזה</b>.</p>
+        <div class="turn-order" id="host-turn-order"></div>
+        <p class="muted small">בתורות, כל אחד אומר <b>מילה אחת</b> שקשורה למילה הסודית. המתחזה מנסה להשתלב בלי להיחשף.</p>
+        <button class="btn btn-primary btn-lg" id="btn-host-vote">⏭️ עברו להצבעה</button>
+      </div>
+
+      <!-- שלב הצבעה -->
+      <div id="host-vote" class="hidden centered">
+        <div class="phase-badge phase-vote">שלב ההצבעה</div>
+        <div class="big-emoji">🗳️</div>
+        <h2>מי המתחזה?</h2>
+        <p class="muted">הצביעו במכשיר שלכם למי שאתם חושדים בו.</p>
+        <div class="vote-progress">
+          <div class="vote-progress-bar"><span id="host-vote-fill"></span></div>
+          <div class="vote-progress-text" id="host-vote-text">0 / 0 הצביעו</div>
+        </div>
+        <ul class="players-grid compact" id="host-vote-players"></ul>
+        <button class="btn btn-secondary" id="btn-host-force-reveal">חשוף תוצאות עכשיו</button>
+      </div>
+
+      <!-- שלב תוצאות -->
+      <div id="host-results" class="hidden centered">
+        <div class="phase-badge phase-results" id="host-outcome-badge">תוצאות</div>
+        <h2 id="host-outcome-title">—</h2>
+        <div class="reveal-word">
+          המילה הייתה: <b id="host-word">—</b>
+        </div>
+        <div class="imposter-reveal" id="host-imposter-reveal"></div>
+        <ul class="tally" id="host-tally"></ul>
+        <div class="scoreboard">
+          <h3>לוח תוצאות</h3>
+          <ol id="host-scoreboard"></ol>
+        </div>
+        <div class="host-actions">
+          <button class="btn btn-primary btn-lg" id="btn-host-again">🔁 סבב נוסף</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- מסך שחקן -->
+    <section class="screen" id="screen-player">
+      <!-- ממתין -->
+      <div id="player-wait" class="centered">
+        <div class="big-emoji">⏳</div>
+        <h2 id="player-name-hi">מחכים למנחה…</h2>
+        <p class="muted">המנחה יתחיל את המשחק בקרוב. השאירו את המסך פתוח.</p>
+        <div class="mini-players" id="player-lobby-list"></div>
+      </div>
+
+      <!-- התפקיד שלי -->
+      <div id="player-role" class="hidden centered">
+        <div class="role-card" id="role-card">
+          <div class="role-emoji" id="role-emoji">🤫</div>
+          <div class="role-label" id="role-label">התפקיד שלך</div>
+          <div class="role-word" id="role-word">—</div>
+          <div class="role-sub" id="role-sub"></div>
+        </div>
+        <p class="muted small">אל תראו את המסך לאחרים! כשמגיע תורכם, אמרו מילה אחת שקשורה למילה.</p>
+      </div>
+
+      <!-- הצבעה -->
+      <div id="player-vote" class="hidden centered">
+        <div class="phase-badge phase-vote">מי המתחזה?</div>
+        <p class="muted">בחרו את מי אתם חושדים:</p>
+        <ul class="vote-list" id="player-vote-list"></ul>
+        <div id="player-voted-msg" class="hidden voted-msg">✅ ההצבעה נקלטה! מחכים לשאר.</div>
+      </div>
+
+      <!-- תוצאות -->
+      <div id="player-results" class="hidden centered">
+        <div class="big-emoji" id="player-result-emoji">🎉</div>
+        <h2 id="player-result-title">—</h2>
+        <div class="reveal-word">המילה: <b id="player-word">—</b></div>
+        <div class="imposter-reveal" id="player-imposter-reveal"></div>
+        <div class="my-score" id="player-my-score"></div>
+        <p class="muted small">מחכים שהמנחה יתחיל סבב נוסף…</p>
+      </div>
+
+      <!-- הודחת -->
+      <div id="player-kicked" class="hidden centered">
+        <div class="big-emoji">👋</div>
+        <h2>הוסרת מהמשחק</h2>
+        <button class="btn btn-primary" onclick="location.href='/'">חזרה לדף הבית</button>
+      </div>
+    </section>
+
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>
