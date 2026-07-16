@@ -138,6 +138,10 @@ select.input { appearance: none; background-image: url("data:image/svg+xml,%3Csv
 .player-chip .kick { position: absolute; top: -6px; right: -6px; background: var(--bad); border: none; color: #fff; border-radius: 50%; width: 22px; height: 22px; cursor: pointer; font-size: 12px; line-height: 1; }
 .player-chip .score { font-size: 13px; color: var(--accent-3); }
 
+.share-row { display: flex; gap: 10px; margin-bottom: 18px; }
+.share-row .btn { flex: 1; }
+.btn-whatsapp { background: linear-gradient(120deg, #25d366, #128c7e); box-shadow: 0 8px 22px rgba(37,211,102,.3); }
+
 .host-actions { text-align: center; }
 .host-actions .btn { max-width: 340px; margin: 0 auto; }
 

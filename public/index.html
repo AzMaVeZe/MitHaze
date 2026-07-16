@@ -56,6 +56,12 @@
           <input type="checkbox" id="set-seescat" checked />
           <span class="switch"></span>
         </label>
+        <label class="switch-row">
+          <span>אני משתתף/ת גם כשחקן 📱</span>
+          <input type="checkbox" id="set-hostplays" />
+          <span class="switch"></span>
+        </label>
+        <input class="input hidden" id="set-hostname" placeholder="השם שלך במשחק" maxlength="20" />
         <button class="btn btn-primary btn-lg" id="btn-create">צור חדר →</button>
         <button class="btn btn-ghost" id="btn-create-back">חזרה</button>
       </div>
@@ -78,6 +84,11 @@
           </div>
         </div>
 
+        <div class="share-row">
+          <button class="btn btn-whatsapp" id="btn-share-wa">📲 שתף בוואטסאפ</button>
+          <button class="btn btn-secondary" id="btn-share-link">🔗 העתק לינק</button>
+        </div>
+
         <div class="players-panel">
           <div class="players-head">
             <h3>שחקנים <span class="pill" id="host-player-count">0</span></h3>
@@ -97,6 +108,15 @@
         <div class="big-emoji" id="host-reveal-emoji">🎭</div>
         <h2>כולם קיבלו תפקיד</h2>
         <p class="muted">כל אחד רואה במכשיר שלו אם הוא יודע את המילה הסודית — או שהוא <b>המתחזה</b>.</p>
+
+        <!-- כרטיס התפקיד של המנחה (רק אם הוא משתתף) -->
+        <div class="role-card hidden" id="host-role-card">
+          <div class="role-emoji" id="host-role-emoji">🤫</div>
+          <div class="role-label" id="host-role-label">התפקיד שלך</div>
+          <div class="role-word" id="host-role-word">—</div>
+          <div class="role-sub" id="host-role-sub"></div>
+        </div>
+
         <div class="turn-order" id="host-turn-order"></div>
         <p class="muted small">בתורות, כל אחד אומר <b>מילה אחת</b> שקשורה למילה הסודית. המתחזה מנסה להשתלב בלי להיחשף.</p>
         <button class="btn btn-primary btn-lg" id="btn-host-vote">⏭️ עברו להצבעה</button>
@@ -113,6 +133,14 @@
           <div class="vote-progress-text" id="host-vote-text">0 / 0 הצביעו</div>
         </div>
         <ul class="players-grid compact" id="host-vote-players"></ul>
+
+        <!-- הצבעת המנחה (רק אם הוא משתתף) -->
+        <div class="hidden" id="host-vote-self" style="width:100%">
+          <p class="muted">ההצבעה שלך:</p>
+          <ul class="vote-list" id="host-vote-list"></ul>
+          <div id="host-voted-msg" class="hidden voted-msg">✅ הצבעת! אפשר לחשוף כשכולם סיימו.</div>
+        </div>
+
         <button class="btn btn-secondary" id="btn-host-force-reveal">חשוף תוצאות עכשיו</button>
       </div>
 

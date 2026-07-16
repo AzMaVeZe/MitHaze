@@ -1,0 +1,12 @@
+# Render Blueprint – פריסה בלחיצה אחת של שרת המשחק.
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: mithaze
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: "22"

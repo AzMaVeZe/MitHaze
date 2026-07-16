@@ -88,12 +88,26 @@ io.on('connection', (socket) => {
     socket.join(roomChannel(room.code));
     socket.data.role = 'host';
     socket.data.code = room.code;
+
+    // המנחה משתתף גם כשחקן (מהטלפון שלו)
+    let hostPlayerId = null;
+    if (settings?.hostPlays) {
+      const hostPlayer = addPlayer(room, settings.hostName || 'המנחה', socket.id);
+      hostPlayer.isHost = true;
+      room.hostPlays = true;
+      room.hostPlayerId = hostPlayer.id;
+      hostPlayerId = hostPlayer.id;
+      socket.data.playerId = hostPlayer.id;
+    }
+
     respond(cb, {
       ok: true,
       code: room.code,
       hostToken: room.hostToken,
+      hostPlayerId,
       state: publicState(room),
     });
+    broadcastRoom(room);
   });
 
   // --- מנחה מתחבר מחדש ---
@@ -106,7 +120,22 @@ io.on('connection', (socket) => {
     socket.join(roomChannel(room.code));
     socket.data.role = 'host';
     socket.data.code = room.code;
-    respond(cb, { ok: true, code: room.code, state: publicState(room) });
+
+    // אם המנחה משתתף כשחקן — חבר מחדש גם את השחקן שלו
+    if (room.hostPlays && room.hostPlayerId) {
+      reconnectPlayer(room, room.hostPlayerId, socket.id);
+      socket.data.playerId = room.hostPlayerId;
+    }
+
+    respond(cb, {
+      ok: true,
+      code: room.code,
+      hostPlayerId: room.hostPlays ? room.hostPlayerId : null,
+      state: publicState(room),
+    });
+    if (room.round && (room.phase === 'reveal' || room.phase === 'vote') && room.hostPlayerId) {
+      socket.emit('player:role', privateRole(room, room.hostPlayerId));
+    }
     broadcastRoom(room);
   });
 

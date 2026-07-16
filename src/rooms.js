@@ -33,6 +33,8 @@ export function createRoom(settings = {}) {
     createdAt: Date.now(),
     hostToken: genId(),
     hostSocketId: null,
+    hostPlays: false,     // האם המנחה משתתף גם כשחקן (מהטלפון שלו)
+    hostPlayerId: null,   // מזהה השחקן של המנחה, אם הוא משתתף
     phase: 'lobby', // lobby | reveal | vote | results
     settings: {
       imposterCount: clampInt(settings.imposterCount, 1, 3, 1),
@@ -251,6 +253,8 @@ export function publicState(room) {
     players,
     minPlayers: MIN_PLAYERS,
     canStart: canStart(room),
+    hostPlays: room.hostPlays,
+    hostPlayerId: room.hostPlayerId,
   };
   if (room.round) {
     state.round = {

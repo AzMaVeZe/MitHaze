@@ -102,16 +102,48 @@
     S.settings.imposterCount = parseInt(b.dataset.val, 10);
   });
 
+  // הצגת שדה שם כשהמנחה מסמן שהוא משתתף
+  el('set-hostplays').addEventListener('change', (e) => {
+    el('set-hostname').classList.toggle('hidden', !e.target.checked);
+    if (e.target.checked) el('set-hostname').focus();
+  });
+
   el('btn-create').addEventListener('click', () => {
     S.settings.categoryId = el('set-category').value;
     S.settings.imposterSeesCategory = el('set-seescat').checked;
-    socket.emit('host:create', S.settings, (res) => {
+    const hostPlays = el('set-hostplays').checked;
+    const hostName = el('set-hostname').value.trim();
+    if (hostPlays && !hostName) return toast('הכניסו את השם שלכם');
+    const payload = { ...S.settings, hostPlays, hostName };
+    socket.emit('host:create', payload, (res) => {
       if (!res?.ok) return toast('שגיאה ביצירת חדר');
       S.role = 'host'; S.code = res.code; S.token = res.hostToken; S.pub = res.state;
+      S.myId = res.hostPlayerId || null;
       saveSession();
       showScreen('screen-host');
       renderHost();
     });
+  });
+
+  // ---------- שיתוף (וואטסאפ / לינק) ----------
+  function joinUrl() { return `${location.origin}/?c=${S.code}`; }
+  function inviteText() {
+    return `בואו נשחק מתחזה! 🎭\nהיכנסו למשחק: ${joinUrl()}\nאו הזינו את הקוד: ${S.code}`;
+  }
+  el('btn-share-wa').addEventListener('click', () => {
+    const url = 'https://wa.me/?text=' + encodeURIComponent(inviteText());
+    window.open(url, '_blank');
+  });
+  el('btn-share-link').addEventListener('click', async () => {
+    const text = inviteText();
+    try {
+      if (navigator.share) { await navigator.share({ title: 'מתחזה', text, url: joinUrl() }); return; }
+      await navigator.clipboard.writeText(joinUrl());
+      toast('הלינק הועתק ✅');
+    } catch (_) {
+      try { await navigator.clipboard.writeText(joinUrl()); toast('הלינק הועתק ✅'); }
+      catch (e) { toast(joinUrl()); }
+    }
   });
 
   // ---------- פעולות מנחה ----------
@@ -171,6 +203,29 @@
   function renderHostReveal() {
     const p = S.pub;
     el('host-reveal-emoji').textContent = p.round?.emoji || '🎭';
+
+    // כרטיס התפקיד של המנחה עצמו (אם משתתף)
+    const card = el('host-role-card');
+    if (p.hostPlays && S.myRole) {
+      card.classList.remove('hidden');
+      const r = S.myRole;
+      if (r.isImposter) {
+        card.className = 'role-card imposter';
+        el('host-role-emoji').textContent = '🕵️';
+        el('host-role-label').textContent = 'אתה…';
+        el('host-role-word').textContent = 'המתחזה';
+        el('host-role-sub').textContent = r.categoryName ? `רמז: "${r.categoryName}". בלף בחוכמה!` : 'אתה לא יודע את המילה. בלף בחוכמה!';
+      } else {
+        card.className = 'role-card crew';
+        el('host-role-emoji').textContent = r.emoji || '🤫';
+        el('host-role-label').textContent = 'המילה הסודית שלך';
+        el('host-role-word').textContent = r.word;
+        el('host-role-sub').textContent = r.categoryName ? `קטגוריה: ${r.categoryName}` : '';
+      }
+    } else {
+      card.classList.add('hidden');
+    }
+
     const order = el('host-turn-order');
     order.innerHTML = '';
     const byId = Object.fromEntries(p.players.map((x) => [x.id, x]));
@@ -192,6 +247,30 @@
     const grid = el('host-vote-players');
     grid.innerHTML = '';
     for (const pl of p.players) grid.appendChild(playerChip(pl, false));
+
+    // הצבעת המנחה עצמו (אם משתתף)
+    const selfBox = el('host-vote-self');
+    if (p.hostPlays && S.myId) {
+      selfBox.classList.remove('hidden');
+      const iVoted = !!p.players.find((x) => x.id === S.myId)?.hasVoted;
+      const list = el('host-vote-list');
+      list.innerHTML = '';
+      for (const pl of p.players) {
+        if (pl.id === S.myId) continue;
+        const b = document.createElement('button');
+        b.innerHTML = `<span>${avatarFor(pl.id)}</span><span>${escapeHtml(pl.name)}</span>`;
+        if (S.selectedVote === pl.id) b.classList.add('selected');
+        b.disabled = iVoted;
+        b.addEventListener('click', () => {
+          S.selectedVote = pl.id;
+          socket.emit('player:vote', { targetId: pl.id });
+        });
+        list.appendChild(b);
+      }
+      el('host-voted-msg').classList.toggle('hidden', !iVoted);
+    } else {
+      selfBox.classList.add('hidden');
+    }
   }
 
   function renderHostResults() {
@@ -232,9 +311,10 @@
   function playerChip(pl, kickable) {
     const li = document.createElement('li');
     li.className = 'player-chip' + (pl.connected ? '' : ' disconnected') + (pl.hasVoted ? ' voted' : '');
+    const isHost = pl.id === S.pub?.hostPlayerId;
     li.innerHTML = `
       <span class="avatar">${avatarFor(pl.id)}</span>
-      <span class="pname">${escapeHtml(pl.name)}</span>
+      <span class="pname">${isHost ? '👑 ' : ''}${escapeHtml(pl.name)}</span>
       ${pl.score ? `<span class="score">${pl.score} נק'</span>` : ''}
       ${pl.hasVoted ? '<span class="badge-voted">✓</span>' : ''}
     `;
@@ -361,6 +441,7 @@
     S.myRole = role;
     S.selectedVote = null;
     if (S.role === 'player' && S.pub?.phase === 'reveal') renderPlayerRole();
+    if (S.role === 'host' && S.pub?.phase === 'reveal') renderHostReveal();
   });
 
   socket.on('player:kicked', () => {
@@ -397,6 +478,7 @@
       socket.emit('host:reconnect', { code: sess.code, hostToken: sess.token }, (res) => {
         if (!res?.ok) { clearSession(); return; }
         S.role = 'host'; S.code = res.code; S.token = sess.token; S.pub = res.state;
+        S.myId = res.hostPlayerId || null;
         showScreen('screen-host'); renderHost();
       });
     } else if (sess.role === 'player') {
