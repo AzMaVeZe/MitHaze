@@ -152,6 +152,8 @@ export function castVote(room, voterId, targetId) {
   const voter = room.players.get(voterId);
   const target = room.players.get(targetId);
   if (!voter || !target || !voter.connected) return false;
+  // רק משתתפי הסבב הנוכחי מצביעים, ורק על משתתפי הסבב
+  if (!room.round.order.includes(voterId) || !room.round.order.includes(targetId)) return false;
   room.round.votes[voterId] = targetId;
   voter.hasVoted = true;
   voter.votedFor = targetId;
@@ -159,7 +161,8 @@ export function castVote(room, voterId, targetId) {
 }
 
 export function allVoted(room) {
-  const active = connectedPlayers(room);
+  // סופרים רק את משתתפי הסבב הנוכחי (מצטרפים מאוחרים ממתינים לסבב הבא)
+  const active = connectedPlayers(room).filter((p) => room.round?.order.includes(p.id));
   return active.length > 0 && active.every((p) => p.hasVoted);
 }
 
@@ -245,6 +248,7 @@ export function publicState(room) {
     connected: p.connected,
     hasVoted: p.hasVoted,
     score: p.score,
+    inRound: room.round ? room.round.order.includes(p.id) : true,
   }));
   const state = {
     code: room.code,
@@ -275,6 +279,8 @@ export function publicState(room) {
 export function privateRole(room, playerId) {
   const player = room.players.get(playerId);
   if (!player || !room.round) return null;
+  // מצטרף מאוחר לא משתתף בסבב הנוכחי — אסור לחשוף לו את המילה
+  if (!room.round.order.includes(playerId)) return null;
   if (player.isImposter) {
     return {
       isImposter: true,

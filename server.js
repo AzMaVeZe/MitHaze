@@ -74,7 +74,8 @@ function broadcastRoom(room) {
   if (room.round && (room.phase === 'reveal' || room.phase === 'vote')) {
     for (const p of connectedPlayers(room)) {
       if (p.socketId) {
-        io.to(p.socketId).emit('player:role', privateRole(room, p.id));
+        const role = privateRole(room, p.id);
+        if (role) io.to(p.socketId).emit('player:role', role);
       }
     }
   }
@@ -134,7 +135,8 @@ io.on('connection', (socket) => {
       state: publicState(room),
     });
     if (room.round && (room.phase === 'reveal' || room.phase === 'vote') && room.hostPlayerId) {
-      socket.emit('player:role', privateRole(room, room.hostPlayerId));
+      const role = privateRole(room, room.hostPlayerId);
+      if (role) socket.emit('player:role', role);
     }
     broadcastRoom(room);
   });
@@ -200,7 +202,7 @@ io.on('connection', (socket) => {
   socket.on('player:join', (payload, cb) => {
     const room = getRoom(payload?.code);
     if (!room) return respond(cb, { ok: false, error: 'room-not-found' });
-    if (room.phase !== 'lobby') return respond(cb, { ok: false, error: 'game-in-progress' });
+    // מותר להצטרף גם באמצע סבב — המצטרף ממתין לסבב הבא
     const player = addPlayer(room, payload?.name, socket.id);
     socket.join(roomChannel(room.code));
     socket.data.role = 'player';
@@ -221,9 +223,10 @@ io.on('connection', (socket) => {
     socket.data.code = room.code;
     socket.data.playerId = player.id;
     respond(cb, { ok: true, playerId: player.id, code: room.code, state: publicState(room) });
-    // שלח תפקיד פרטי אם באמצע סבב
+    // שלח תפקיד פרטי אם באמצע סבב (ורק אם השחקן משתתף בסבב)
     if (room.round && (room.phase === 'reveal' || room.phase === 'vote')) {
-      socket.emit('player:role', privateRole(room, player.id));
+      const role = privateRole(room, player.id);
+      if (role) socket.emit('player:role', role);
     }
     broadcastRoom(room);
   });
