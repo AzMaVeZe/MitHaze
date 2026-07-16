@@ -81,10 +81,32 @@ function broadcastRoom(room) {
   }
 }
 
+// כשסוקט עובר לחדר חדש — עוזבים את ערוצי החדרים הקודמים ומנתקים
+// את הזהות הישנה שלו שם, כדי שקבוצות שונות לא יתערבבו.
+function leaveOtherRooms(socket, newCode) {
+  for (const r of [...socket.rooms]) {
+    if (r.startsWith('room:') && r !== roomChannel(newCode)) socket.leave(r);
+  }
+  if (socket.data.code && socket.data.code !== newCode) {
+    const old = getRoom(socket.data.code);
+    if (old) {
+      const op = old.players.get(socket.data.playerId);
+      if (op && op.socketId === socket.id) {
+        op.connected = false;
+        op.socketId = null;
+      }
+      if (old.hostSocketId === socket.id) old.hostSocketId = null;
+      broadcastRoom(old);
+    }
+  }
+  socket.data.playerId = null;
+}
+
 io.on('connection', (socket) => {
   // --- מנחה יוצר חדר ---
   socket.on('host:create', async (settings, cb) => {
     const room = createRoom(settings || {});
+    leaveOtherRooms(socket, room.code);
     room.hostSocketId = socket.id;
     socket.join(roomChannel(room.code));
     socket.data.role = 'host';
@@ -117,6 +139,7 @@ io.on('connection', (socket) => {
     if (!room || room.hostToken !== payload?.hostToken) {
       return respond(cb, { ok: false, error: 'room-not-found' });
     }
+    leaveOtherRooms(socket, room.code);
     room.hostSocketId = socket.id;
     socket.join(roomChannel(room.code));
     socket.data.role = 'host';
@@ -202,6 +225,7 @@ io.on('connection', (socket) => {
   socket.on('player:join', (payload, cb) => {
     const room = getRoom(payload?.code);
     if (!room) return respond(cb, { ok: false, error: 'room-not-found' });
+    leaveOtherRooms(socket, room.code);
     // מותר להצטרף גם באמצע סבב — המצטרף ממתין לסבב הבא
     const player = addPlayer(room, payload?.name, socket.id);
     socket.join(roomChannel(room.code));
@@ -218,6 +242,7 @@ io.on('connection', (socket) => {
     if (!room) return respond(cb, { ok: false, error: 'room-not-found' });
     const player = reconnectPlayer(room, payload?.playerId, socket.id);
     if (!player) return respond(cb, { ok: false, error: 'player-not-found' });
+    leaveOtherRooms(socket, room.code);
     socket.join(roomChannel(room.code));
     socket.data.role = 'player';
     socket.data.code = room.code;

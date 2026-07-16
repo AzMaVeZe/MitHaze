@@ -479,38 +479,34 @@
     showScreen('screen-player');
   });
 
-  socket.on('connect', () => tryReconnect());
-  socket.on('disconnect', () => toast('החיבור נותק… מתחבר מחדש'));
+  // חיבור חוזר אחרי נפילת רשת (באותו עמוד) — משחזרים את המשחק שהיינו בו.
+  // טעינת עמוד חדשה לעולם לא משחזרת אוטומטית: מסך הפתיחה מציג באנר "חזרה למשחק".
+  socket.on('connect', () => {
+    if (S.code && S.token) resendReconnect();
+  });
+  socket.on('disconnect', () => {
+    if (S.code) toast('החיבור נותק… מתחבר מחדש');
+  });
 
   // ---------- התחברות מחדש ----------
-  let reconnected = false;
-  function tryReconnect() {
-    if (reconnected) {
-      // חיבור חוזר אחרי ניתוק — שחזר את החדר
-      resendReconnect();
-      return;
-    }
-    reconnected = true;
-    let sess = null;
-    try { sess = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch (_) {}
-    if (!sess?.code) return;
-    // הגיעו מלינק הצטרפות לחדר אחר — הלינק מנצח, לא משחזרים סשן ישן
-    if (S.urlCode && sess.code !== S.urlCode) return;
-    doReconnect(sess);
+  function resendReconnect() {
+    doReconnect({ role: S.role, code: S.code, token: S.token });
   }
 
-  function resendReconnect() {
-    if (!S.code || !S.token) return;
-    doReconnect({ role: S.role, code: S.code, token: S.token });
+  function readSession() {
+    try { return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch (_) { return null; }
   }
 
   function sessionDead() {
     clearSession();
+    el('resume-banner').classList.add('hidden');
     // אם היינו באמצע משחק על המסך — חוזרים הביתה עם הסבר
     if (S.role) {
       toast('החדר כבר לא קיים — פתחו משחק חדש');
       S.role = null; S.code = null; S.token = null; S.myId = null; S.pub = null;
       showScreen('screen-home');
+    } else {
+      toast('המשחק הקודם כבר לא קיים');
     }
   }
 
@@ -536,10 +532,23 @@
     const params = new URLSearchParams(location.search);
     const c = params.get('c') || params.get('code');
     if (c) {
-      // לינק הצטרפות: שומרים את הקוד כדי שלא ישוחזר סשן ישן של חדר אחר
+      // לינק הצטרפות: ממלאים את הקוד מראש
       S.urlCode = c.toUpperCase();
       el('join-code').value = S.urlCode;
       setTimeout(() => el('join-name').focus(), 300);
+    }
+
+    // אם יש משחק פעיל שמור — מציעים לחזור אליו בבאנר (לא משחזרים אוטומטית).
+    // כשמגיעים מלינק לחדר אחר, הלינק מנצח ולא מציגים את הבאנר.
+    const sess = readSession();
+    if (sess?.code && (!S.urlCode || S.urlCode === sess.code)) {
+      el('resume-text').textContent = `🎮 יש לך משחק פעיל — קוד ${sess.code}`;
+      el('resume-banner').classList.remove('hidden');
+      el('btn-resume').addEventListener('click', () => doReconnect(sess));
+      el('btn-resume-dismiss').addEventListener('click', () => {
+        clearSession();
+        el('resume-banner').classList.add('hidden');
+      });
     }
   }
   init();
