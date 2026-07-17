@@ -7,6 +7,7 @@ import { Server } from 'socket.io';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import QRCode from 'qrcode';
+import { readFileSync } from 'fs';
 
 import { CATEGORIES } from './data/words.js';
 import {
@@ -39,8 +40,9 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.static(join(__dirname, 'public')));
 
-// בריאות
-app.get('/health', (_req, res) => res.json({ ok: true }));
+// בריאות — כולל גרסה כדי שאפשר יהיה לוודא איזו מהדורה רצה בפרודקשן
+const VERSION = JSON.parse(readFileSync(join(__dirname, 'package.json'), 'utf8')).version;
+app.get('/health', (_req, res) => res.json({ ok: true, version: VERSION }));
 
 // רשימת קטגוריות עבור מסך ההגדרות
 app.get('/api/categories', (_req, res) => {

@@ -1,6 +1,6 @@
 {
   "name": "mithaze",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "משחק מתחזה מרובה משתתפים – כולם מצטרפים מהטלפון שלהם דרך קוד, לינק או QR",
   "type": "module",
   "main": "server.js",
