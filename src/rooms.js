@@ -43,6 +43,8 @@ export function createRoom(settings = {}) {
     },
     players: new Map(), // playerId -> player
     round: null,
+    roundNumber: 0, // מספר הסבב הנוכחי (עולה בכל התחלת סבב)
+    history: [],    // תוצאות לפי סבב: {round, word, outcome, deltas}
   };
   rooms.set(code, room);
   return room;
@@ -128,6 +130,7 @@ export function startRound(room) {
   // סדר תורים אקראי למתן רמזים
   const order = [...active].sort(() => Math.random() - 0.5).map((p) => p.id);
 
+  room.roundNumber += 1;
   room.round = {
     word,
     categoryName,
@@ -202,18 +205,25 @@ export function tallyResults(room) {
   // ניקוד:
   // - צוות שמצביע נכון (למתחזה) מקבל +1
   // - כל מתחזה ששרד (לא הודח יחיד) מקבל +2
+  // נאספים כ"דלתא לסבב" כדי לבנות לוח תוצאות מצטבר סבב-אחרי-סבב.
+  const deltas = {};
   for (const [voterId, targetId] of Object.entries(votes)) {
     const voter = room.players.get(voterId);
     if (voter && !voter.isImposter && imposterSet.has(targetId)) {
-      voter.score += 1;
+      deltas[voterId] = (deltas[voterId] || 0) + 1;
     }
   }
   for (const impId of imposterIds) {
     const imp = room.players.get(impId);
-    if (imp && impId !== ejectedId) imp.score += 2;
+    if (imp && impId !== ejectedId) deltas[impId] = (deltas[impId] || 0) + 2;
+  }
+  for (const [pid, d] of Object.entries(deltas)) {
+    room.players.get(pid).score += d;
   }
 
   const results = {
+    round: room.roundNumber,
+    deltas,
     word: room.round.word,
     categoryName: room.round.categoryName,
     emoji: room.round.emoji,
@@ -225,6 +235,13 @@ export function tallyResults(room) {
     outcome: crewCaughtImposter ? 'crew' : 'imposter',
   };
   room.round.results = results;
+  room.history.push({
+    round: room.roundNumber,
+    word: room.round.word,
+    outcome: results.outcome,
+    imposterIds,
+    deltas,
+  });
   room.phase = 'results';
   return results;
 }
@@ -275,6 +292,8 @@ export function publicState(room) {
     canStart: canStart(room),
     hostPlays: room.hostPlays,
     hostPlayerId: room.hostPlayerId,
+    roundNumber: room.roundNumber,
+    history: room.history,
   };
   if (room.round) {
     state.round = {
