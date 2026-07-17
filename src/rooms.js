@@ -151,6 +151,7 @@ export function startRound(room) {
     order,
     startingPlayerId: order[0],
     turnIndex: 0, // תור מתן הרמזים הנוכחי (אינדקס ב-order)
+    turnsDone: 0, // כמה תורות הושלמו — אחרי 2 סבבים מלאים עוברים להצבעה
     clues: [],    // רמזים כתובים לפי סדר: {playerId, text}
     votes: {}, // voterId -> targetId
     results: null,
@@ -164,6 +165,21 @@ export function beginVoting(room) {
   room.phase = 'vote';
 }
 
+export const CLUE_CYCLES = 2; // מספר סבבי רמזים לפני מעבר אוטומטי להצבעה
+
+// השחקן שבתור סיים (אמר/כתב) — מקדם את התור,
+// ואחרי CLUE_CYCLES סבבים מלאים עובר אוטומטית להצבעה.
+export function completeTurn(room) {
+  if (!room.round || room.phase !== 'reveal') return false;
+  room.round.turnsDone += 1;
+  if (room.round.turnsDone >= room.round.order.length * CLUE_CYCLES) {
+    beginVoting(room);
+  } else {
+    advanceTurn(room);
+  }
+  return true;
+}
+
 // רושם רמז כתוב של השחקן שבתור ומעביר את התור הלאה.
 export function addClue(room, playerId, text) {
   if (!room.round || room.phase !== 'reveal') return false;
@@ -173,7 +189,7 @@ export function addClue(room, playerId, text) {
   const clue = String(text || '').trim().slice(0, 24);
   if (!clue) return false;
   room.round.clues.push({ playerId, text: clue });
-  advanceTurn(room);
+  completeTurn(room);
   return true;
 }
 
@@ -331,6 +347,8 @@ export function publicState(room) {
       turnIndex: room.round.turnIndex,
       currentTurnId: room.round.order[room.round.turnIndex] || null,
       clues: room.round.clues,
+      clueCycle: Math.min(CLUE_CYCLES, Math.floor(room.round.turnsDone / room.round.order.length) + 1),
+      clueCycles: CLUE_CYCLES,
     };
   }
   // בשלב התוצאות חושפים הכול

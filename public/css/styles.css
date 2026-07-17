@@ -52,6 +52,7 @@ body {
 .logo { font-size: 76px; line-height: 1; filter: drop-shadow(0 6px 16px rgba(0,0,0,.4)); animation: bob 3s ease-in-out infinite; }
 @keyframes bob { 0%,100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-8px) rotate(3deg); } }
 .hero h1 { font-size: 54px; font-weight: 900; letter-spacing: -1px; margin: 6px 0; background: linear-gradient(90deg, var(--accent), var(--accent-3)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+.slogan { color: var(--accent-3); font-size: 17px; font-weight: 700; font-style: italic; margin: 2px 0 8px; }
 .tagline { color: var(--muted); font-size: 17px; max-width: 420px; margin: 0 auto; }
 .foot-note { text-align: center; color: var(--muted); font-size: 14px; margin-top: 20px; }
 .install-btn { margin-top: 16px; border-color: var(--accent-3); animation: fade .4s ease; }

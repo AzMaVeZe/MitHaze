@@ -19,7 +19,7 @@ import {
   canStart,
   startRound,
   beginVoting,
-  advanceTurn,
+  completeTurn,
   addClue,
   castVote,
   allVoted,
@@ -275,7 +275,7 @@ io.on('connection', (socket) => {
     const isHost = room.hostSocketId === socket.id;
     const isCurrent = socket.data.playerId === currentTurnId;
     if (!isHost && !isCurrent) return;
-    if (advanceTurn(room)) broadcastRoom(room);
+    if (completeTurn(room)) broadcastRoom(room);
   });
 
   // --- רמז כתוב: השחקן שבתור שולח את המילה שאמר ---
