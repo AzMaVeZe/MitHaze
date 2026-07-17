@@ -113,14 +113,24 @@
   el('clue-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendClue('clue-input'); });
   el('host-clue-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendClue('host-clue-input'); });
 
-  // רשימת הרמזים שנאמרו — מוצגת לכולם
+  // רשימת הרמזים שנאמרו — מוצגת לכולם.
+  // מקובץ לפי שחקן: כל המילים של אותו שחקן מופיעות יחד באותו צ'יפ.
   function renderClues(containerId) {
     const box = el(containerId);
     const clues = S.pub?.round?.clues || [];
     if (!S.pub?.settings?.typedClues || clues.length === 0) { box.innerHTML = ''; return; }
     const byId = Object.fromEntries(S.pub.players.map((x) => [x.id, x]));
-    box.innerHTML = '<div class="clues-title">📝 מה נאמר עד עכשיו</div>' + clues.map((c) =>
-      `<span class="clue-chip"><b>${avatarFor(c.playerId)} ${escapeHtml(byId[c.playerId]?.name || '?')}:</b> ${escapeHtml(c.text)}</span>`
+    const grouped = [];
+    const idx = {};
+    for (const c of clues) {
+      if (idx[c.playerId] == null) {
+        idx[c.playerId] = grouped.length;
+        grouped.push({ playerId: c.playerId, words: [] });
+      }
+      grouped[idx[c.playerId]].words.push(c.text);
+    }
+    box.innerHTML = '<div class="clues-title">📝 מה נאמר עד עכשיו</div>' + grouped.map((g) =>
+      `<span class="clue-chip"><b>${avatarFor(g.playerId)} ${escapeHtml(byId[g.playerId]?.name || '?')}:</b> ${g.words.map(escapeHtml).join(' · ')}</span>`
     ).join('');
   }
 
@@ -521,13 +531,17 @@
       if (myTurn) {
         el('player-turn-text').textContent = '🎙️ תורך! אמרו מילה אחת שקשורה למילה';
         el('player-clue-row').classList.toggle('hidden', !typed);
-        el('btn-turn-done').classList.remove('hidden');
-        el('btn-turn-done').textContent = typed ? 'דלג בלי לכתוב ✓' : 'אמרתי ✓';
+        el('player-skip-row').classList.remove('hidden');
+        // עם רמזים כתובים: כפתור דילוג קטן בצד + הסבר. בלעדיהם: כפתור רגיל.
+        const done = el('btn-turn-done');
+        done.textContent = typed ? 'דלג בלי לכתוב' : 'אמרתי ✓';
+        done.classList.toggle('mini', typed);
+        el('skip-hint').classList.toggle('hidden', !typed);
       } else {
         const byId = Object.fromEntries(p.players.map((x) => [x.id, x]));
         el('player-turn-text').textContent = `עכשיו בתור: ${avatarFor(cur)} ${byId[cur]?.name || ''}`;
         el('player-clue-row').classList.add('hidden');
-        el('btn-turn-done').classList.add('hidden');
+        el('player-skip-row').classList.add('hidden');
       }
     } else {
       banner.classList.add('hidden');
