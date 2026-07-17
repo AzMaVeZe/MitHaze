@@ -40,6 +40,7 @@ export function createRoom(settings = {}) {
       imposterCount: clampInt(settings.imposterCount, 1, 3, 1),
       categoryId: settings.categoryId || 'all',
       imposterSeesCategory: settings.imposterSeesCategory !== false,
+      typedClues: settings.typedClues !== false, // רמזים כתובים שכולם רואים (אופציונלי)
     },
     players: new Map(), // playerId -> player
     round: null,
@@ -139,6 +140,7 @@ export function startRound(room) {
     order,
     startingPlayerId: order[0],
     turnIndex: 0, // תור מתן הרמזים הנוכחי (אינדקס ב-order)
+    clues: [],    // רמזים כתובים לפי סדר: {playerId, text}
     votes: {}, // voterId -> targetId
     results: null,
   };
@@ -149,6 +151,19 @@ export function startRound(room) {
 export function beginVoting(room) {
   if (!room.round) return;
   room.phase = 'vote';
+}
+
+// רושם רמז כתוב של השחקן שבתור ומעביר את התור הלאה.
+export function addClue(room, playerId, text) {
+  if (!room.round || room.phase !== 'reveal') return false;
+  if (!room.settings.typedClues) return false;
+  const currentTurnId = room.round.order[room.round.turnIndex];
+  if (playerId !== currentTurnId) return false;
+  const clue = String(text || '').trim().slice(0, 24);
+  if (!clue) return false;
+  room.round.clues.push({ playerId, text: clue });
+  advanceTurn(room);
+  return true;
 }
 
 // מעביר את תור הרמזים לשחקן הבא (מדלג על מנותקים).
@@ -303,6 +318,7 @@ export function publicState(room) {
       startingPlayerId: room.round.startingPlayerId,
       turnIndex: room.round.turnIndex,
       currentTurnId: room.round.order[room.round.turnIndex] || null,
+      clues: room.round.clues,
     };
   }
   // בשלב התוצאות חושפים הכול

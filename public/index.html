@@ -4,6 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#1a1333" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="מתחזה" />
   <title>מתחזה 🎭 — משחק מסיבה מרובה משתתפים</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="stylesheet" href="/css/styles.css" />
@@ -38,6 +44,7 @@
           <button class="btn btn-secondary btn-lg" type="submit">🚪 הצטרף למשחק</button>
         </form>
       </div>
+      <button class="btn btn-secondary install-btn hidden" id="btn-install">📲 התקינו את מתחזה כאפליקציה</button>
       <p class="foot-note">בונים חבורה, מגלים מי המתחזה שלא יודע את המילה הסודית.</p>
     </section>
 
@@ -62,6 +69,11 @@
         <label class="switch-row">
           <span>המתחזה רואה את הקטגוריה</span>
           <input type="checkbox" id="set-seescat" checked />
+          <span class="switch"></span>
+        </label>
+        <label class="switch-row">
+          <span>רמזים כתובים שכולם רואים 📝</span>
+          <input type="checkbox" id="set-typedclues" checked />
           <span class="switch"></span>
         </label>
         <label class="switch-row">
@@ -119,7 +131,12 @@
 
         <div class="turn-banner hidden" id="host-turn-banner">
           <div class="turn-banner-text" id="host-turn-text">🎙️ תורך! אמרו מילה אחת</div>
+          <div class="clue-input-row hidden" id="host-clue-row">
+            <input class="input clue-input" id="host-clue-input" placeholder="מה אמרת? (יוצג לכולם)" maxlength="24" autocomplete="off" />
+            <button class="btn btn-primary" id="btn-host-clue-send">שלח</button>
+          </div>
         </div>
+        <div class="clues-list" id="host-clues"></div>
 
         <!-- כרטיס התפקיד של המנחה (רק אם הוא משתתף) -->
         <div class="role-card facedown hidden" id="host-role-card" role="button" tabindex="0">
@@ -142,6 +159,7 @@
         <div class="big-emoji">🗳️</div>
         <h2>מי המתחזה?</h2>
         <p class="muted">הצביעו במכשיר שלכם למי שאתם חושדים בו.</p>
+        <div class="clues-list" id="host-vote-clues"></div>
         <div class="vote-progress">
           <div class="vote-progress-bar"><span id="host-vote-fill"></span></div>
           <div class="vote-progress-text" id="host-vote-text">0 / 0 הצביעו</div>
@@ -192,8 +210,13 @@
       <div id="player-role" class="hidden centered">
         <div class="turn-banner hidden" id="player-turn-banner">
           <div class="turn-banner-text" id="player-turn-text">🎙️ תורך! אמרו מילה אחת</div>
+          <div class="clue-input-row hidden" id="player-clue-row">
+            <input class="input clue-input" id="clue-input" placeholder="מה אמרת? (יוצג לכולם)" maxlength="24" autocomplete="off" />
+            <button class="btn btn-primary" id="btn-clue-send">שלח</button>
+          </div>
           <button class="btn btn-secondary btn-turn-done hidden" id="btn-turn-done">אמרתי ✓</button>
         </div>
+        <div class="clues-list" id="player-clues"></div>
         <div class="role-card facedown" id="role-card" role="button" tabindex="0">
           <div class="role-emoji" id="role-emoji">🎭</div>
           <div class="role-label" id="role-label">התפקיד שלך מוסתר</div>
@@ -206,6 +229,7 @@
       <!-- הצבעה -->
       <div id="player-vote" class="hidden centered">
         <div class="phase-badge phase-vote">מי המתחזה?</div>
+        <div class="clues-list" id="player-vote-clues"></div>
         <p class="muted">בחרו את מי אתם חושדים:</p>
         <ul class="vote-list" id="player-vote-list"></ul>
         <div id="player-voted-msg" class="hidden voted-msg">✅ ההצבעה נקלטה! מחכים לשאר.</div>
