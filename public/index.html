@@ -214,7 +214,10 @@
             <input class="input clue-input" id="clue-input" placeholder="מה אמרת? (יוצג לכולם)" maxlength="24" autocomplete="off" />
             <button class="btn btn-primary" id="btn-clue-send">שלח</button>
           </div>
-          <button class="btn btn-secondary btn-turn-done hidden" id="btn-turn-done">אמרתי ✓</button>
+          <div class="skip-row hidden" id="player-skip-row">
+            <button class="btn btn-secondary btn-turn-done" id="btn-turn-done">אמרתי ✓</button>
+            <span class="skip-hint hidden" id="skip-hint">אם משחקים בעל פה</span>
+          </div>
         </div>
         <div class="clues-list" id="player-clues"></div>
         <div class="role-card facedown" id="role-card" role="button" tabindex="0">

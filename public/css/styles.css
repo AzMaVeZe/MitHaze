@@ -169,6 +169,15 @@ select.input { appearance: none; background-image: url("data:image/svg+xml,%3Csv
 .turn-banner.someone-else .turn-banner-text { font-size: 16px; font-weight: 700; }
 @keyframes turnPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,212,92,.5); } 50% { box-shadow: 0 0 0 10px rgba(255,212,92,0); } }
 
+/* --- שורת דילוג (כפתור קטן בצד + הסבר) --- */
+.skip-row { display: flex; align-items: center; gap: 8px; width: 100%; }
+.turn-banner .btn-turn-done.mini {
+  width: auto; padding: 6px 14px; font-size: 13px; font-weight: 700;
+  background: rgba(42,26,94,.12); color: #2a1a5e;
+  border: 1px solid rgba(42,26,94,.35); border-radius: 10px;
+}
+.skip-hint { font-size: 12px; color: #2a1a5e; opacity: .75; font-weight: 700; }
+
 /* --- רמזים כתובים --- */
 .clue-input-row { display: flex; gap: 8px; width: 100%; }
 .clue-input-row .clue-input { flex: 1; padding: 11px 14px; font-size: 16px; }
