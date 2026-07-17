@@ -338,7 +338,7 @@
     const byId = Object.fromEntries(p.players.map((x) => [x.id, x]));
     const cur = p.round?.currentTurnId;
     el('host-now-playing').textContent = cur
-      ? `🎙️ עכשיו בתור: ${avatarFor(cur)} ${byId[cur]?.name || ''}`
+      ? `🎙️ עכשיו בתור: ${avatarFor(cur)} ${byId[cur]?.name || ''} · סבב רמזים ${p.round.clueCycle}/${p.round.clueCycles}`
       : '';
     const myTurn = p.hostPlays && cur && cur === S.myId;
     el('host-turn-banner').classList.toggle('hidden', !myTurn);
