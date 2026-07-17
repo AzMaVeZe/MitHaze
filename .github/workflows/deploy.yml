@@ -1,0 +1,29 @@
+# פריסה ל-Render דרך Deploy Hook — עוקף את הצורך בחיבור GitHub App של Render.
+# דורש סוד בשם RENDER_DEPLOY_HOOK במאגר:
+#   1. Render → השירות mithaze → Settings → Deploy Hook → העתיקו את ה-URL.
+#   2. GitHub → Settings → Secrets and variables → Actions → New repository secret:
+#      שם: RENDER_DEPLOY_HOOK, ערך: ה-URL שהעתקתם.
+# מאותו רגע כל push ל-main יפרוס אוטומטית. בלי הסוד — הצעד מדלג בשקט.
+name: Deploy to Render
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Trigger Render deploy hook
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "RENDER_DEPLOY_HOOK secret is not set — skipping (see comments in this file)."
+            exit 0
+          fi
+          curl -fsS -X POST "$HOOK" \
+            && echo "Render deploy triggered ✅" \
+            || { echo "deploy hook call failed"; exit 1; }
