@@ -8,6 +8,16 @@ const rooms = new Map();
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // ללא תווים מבלבלים (O/0, I/1)
 const MIN_PLAYERS = 3;
 
+const AVATARS = ['🦊', '🐼', '🦁', '🐸', '🦉', '🐙', '🦄', '🐝', '🐨', '🦖', '🐧', '🦋', '🐬', '🦔', '🐢', '🦩', '🐰', '🐷', '🐵', '🦇'];
+
+// בוחר אווטאר שעוד לא בשימוש בחדר — כך לכל שחקן יש אייקון ייחודי משלו.
+function pickAvatar(room) {
+  const used = new Set([...room.players.values()].map((p) => p.avatar));
+  const free = AVATARS.filter((a) => !used.has(a));
+  const pool = free.length ? free : AVATARS; // מעל 20 שחקנים — חוזרים למאגר המלא
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
 function genCode() {
   let code;
   do {
@@ -67,6 +77,7 @@ export function addPlayer(room, name, socketId) {
   const player = {
     id: playerId,
     name: String(name || '').trim().slice(0, 20) || 'שחקן',
+    avatar: pickAvatar(room),
     socketId,
     connected: true,
     isHost: false,
@@ -293,6 +304,7 @@ export function publicState(room) {
   const players = [...room.players.values()].map((p) => ({
     id: p.id,
     name: p.name,
+    avatar: p.avatar,
     connected: p.connected,
     hasVoted: p.hasVoted,
     score: p.score,
