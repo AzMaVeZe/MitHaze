@@ -374,13 +374,46 @@
     }
     if (entries.length === 0) tally.innerHTML = '<li>לא היו הצבעות</li>';
 
-    const sb = el('host-scoreboard');
+    renderScoreboard('host-scoreboard', 'host-rounds');
+  }
+
+  // לוח תוצאות משותף: דירוג מצטבר עם "+X" לסבב האחרון, וטבלה סבב-אחרי-סבב.
+  function renderScoreboard(listId, roundsId) {
+    const p = S.pub;
+    const deltas = p.results?.deltas || {};
+    const sorted = [...p.players].sort((a, b) => b.score - a.score);
+
+    const sb = el(listId);
     sb.innerHTML = '';
-    [...p.players].sort((a, b) => b.score - a.score).forEach((pl) => {
+    sorted.forEach((pl, i) => {
       const li = document.createElement('li');
-      li.innerHTML = `<span>${avatarFor(pl.id)} ${pl.name}</span><span>${pl.score}</span>`;
+      if (pl.id === S.myId) li.classList.add('me');
+      const d = deltas[pl.id] || 0;
+      li.innerHTML =
+        `<span>${i === 0 && pl.score > 0 ? '🏆 ' : ''}${avatarFor(pl.id)} ${escapeHtml(pl.name)}</span>` +
+        `<span class="score-cell">${d ? `<span class="delta">‎+${d}</span>` : ''}<b>${pl.score}</b></span>`;
       sb.appendChild(li);
     });
+
+    // טבלת סבבים: עמודה לכל סבב + סה"כ
+    const wrap = el(roundsId);
+    const history = p.history || [];
+    if (history.length < 1) { wrap.innerHTML = ''; return; }
+    const byId = Object.fromEntries(p.players.map((x) => [x.id, x]));
+    let html = '<table class="rounds-table"><thead><tr><th>שחקן</th>';
+    for (const h of history) html += `<th>${h.round}</th>`;
+    html += '<th>סה"כ</th></tr></thead><tbody>';
+    for (const pl of sorted) {
+      html += `<tr${pl.id === S.myId ? ' class="me"' : ''}><td>${avatarFor(pl.id)} ${escapeHtml(pl.name)}</td>`;
+      for (const h of history) {
+        const d = h.deltas?.[pl.id] || 0;
+        const wasImposter = h.imposterIds?.includes(pl.id);
+        html += `<td>${wasImposter ? '🕵️' : ''}${d || '·'}</td>`;
+      }
+      html += `<td><b>${pl.score}</b></td></tr>`;
+    }
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
   }
 
   function playerChip(pl, kickable) {
@@ -516,7 +549,9 @@
     const impNames = r.imposterIds.map((id) => byId[id]?.name || '?').join(', ');
     el('player-imposter-reveal').innerHTML = `המתחזה${r.imposterIds.length > 1 ? 'ים' : ''}: <span class="imp">${impNames}</span>` +
       (amImposter ? ' <b>(זה אתה!)</b>' : '');
-    el('player-my-score').textContent = me ? `הניקוד שלך: ${me.score}` : '';
+    const d = r.deltas?.[S.myId] || 0;
+    el('player-my-score').textContent = me ? `הניקוד שלך: ${me.score}${d ? ` (+${d} בסבב הזה)` : ''}` : '';
+    renderScoreboard('player-scoreboard', 'player-rounds');
   }
 
   // ---------- עזרי תצוגה ----------
