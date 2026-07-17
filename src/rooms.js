@@ -135,6 +135,7 @@ export function startRound(room) {
     imposterIds: [...imposterIds],
     order,
     startingPlayerId: order[0],
+    turnIndex: 0, // תור מתן הרמזים הנוכחי (אינדקס ב-order)
     votes: {}, // voterId -> targetId
     results: null,
   };
@@ -145,6 +146,21 @@ export function startRound(room) {
 export function beginVoting(room) {
   if (!room.round) return;
   room.phase = 'vote';
+}
+
+// מעביר את תור הרמזים לשחקן הבא (מדלג על מנותקים).
+export function advanceTurn(room) {
+  if (!room.round || room.phase !== 'reveal') return false;
+  const { order } = room.round;
+  for (let step = 1; step <= order.length; step++) {
+    const next = (room.round.turnIndex + step) % order.length;
+    const p = room.players.get(order[next]);
+    if (p && p.connected) {
+      room.round.turnIndex = next;
+      return true;
+    }
+  }
+  return false;
 }
 
 export function castVote(room, voterId, targetId) {
@@ -266,6 +282,8 @@ export function publicState(room) {
       emoji: room.round.emoji,
       order: room.round.order,
       startingPlayerId: room.round.startingPlayerId,
+      turnIndex: room.round.turnIndex,
+      currentTurnId: room.round.order[room.round.turnIndex] || null,
     };
   }
   // בשלב התוצאות חושפים הכול

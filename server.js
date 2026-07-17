@@ -18,6 +18,7 @@ import {
   canStart,
   startRound,
   beginVoting,
+  advanceTurn,
   castVote,
   allVoted,
   tallyResults,
@@ -254,6 +255,24 @@ io.on('connection', (socket) => {
       if (role) socket.emit('player:role', role);
     }
     broadcastRoom(room);
+  });
+
+  // --- בדיקת מצב חדר (לשחזור שקט בטעינת עמוד) ---
+  socket.on('room:probe', (payload, cb) => {
+    const room = getRoom(payload?.code);
+    if (!room) return respond(cb, { exists: false });
+    respond(cb, { exists: true, phase: room.phase });
+  });
+
+  // --- סיום תור רמז: השחקן שבתור, או המנחה ---
+  socket.on('turn:done', () => {
+    const room = getRoom(socket.data.code);
+    if (!room || !room.round || room.phase !== 'reveal') return;
+    const currentTurnId = room.round.order[room.round.turnIndex];
+    const isHost = room.hostSocketId === socket.id;
+    const isCurrent = socket.data.playerId === currentTurnId;
+    if (!isHost && !isCurrent) return;
+    if (advanceTurn(room)) broadcastRoom(room);
   });
 
   // --- שחקן מצביע ---

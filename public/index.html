@@ -117,17 +117,23 @@
         <h2>כולם קיבלו תפקיד</h2>
         <p class="muted">כל אחד רואה במכשיר שלו אם הוא יודע את המילה הסודית — או שהוא <b>המתחזה</b>.</p>
 
-        <!-- כרטיס התפקיד של המנחה (רק אם הוא משתתף) -->
-        <div class="role-card hidden" id="host-role-card">
-          <div class="role-emoji" id="host-role-emoji">🤫</div>
-          <div class="role-label" id="host-role-label">התפקיד שלך</div>
-          <div class="role-word" id="host-role-word">—</div>
-          <div class="role-sub" id="host-role-sub"></div>
+        <div class="turn-banner hidden" id="host-turn-banner">
+          <div class="turn-banner-text" id="host-turn-text">🎙️ תורך! אמרו מילה אחת</div>
         </div>
 
+        <!-- כרטיס התפקיד של המנחה (רק אם הוא משתתף) -->
+        <div class="role-card facedown hidden" id="host-role-card" role="button" tabindex="0">
+          <div class="role-emoji" id="host-role-emoji">🎭</div>
+          <div class="role-label" id="host-role-label">התפקיד שלך מוסתר</div>
+          <div class="role-word" id="host-role-word">🤫</div>
+          <div class="role-sub" id="host-role-sub">לחצו על הכרטיס כדי לחשוף</div>
+        </div>
+
+        <div class="now-playing" id="host-now-playing"></div>
         <div class="turn-order" id="host-turn-order"></div>
+        <button class="btn btn-secondary" id="btn-host-next-turn">⏭ השחקן הבא</button>
         <p class="muted small">בתורות, כל אחד אומר <b>מילה אחת</b> שקשורה למילה הסודית. המתחזה מנסה להשתלב בלי להיחשף.</p>
-        <button class="btn btn-primary btn-lg" id="btn-host-vote">⏭️ עברו להצבעה</button>
+        <button class="btn btn-primary btn-lg" id="btn-host-vote">🗳️ עברו להצבעה</button>
       </div>
 
       <!-- שלב הצבעה -->
@@ -183,13 +189,17 @@
 
       <!-- התפקיד שלי -->
       <div id="player-role" class="hidden centered">
-        <div class="role-card" id="role-card">
-          <div class="role-emoji" id="role-emoji">🤫</div>
-          <div class="role-label" id="role-label">התפקיד שלך</div>
-          <div class="role-word" id="role-word">—</div>
-          <div class="role-sub" id="role-sub"></div>
+        <div class="turn-banner hidden" id="player-turn-banner">
+          <div class="turn-banner-text" id="player-turn-text">🎙️ תורך! אמרו מילה אחת</div>
+          <button class="btn btn-secondary btn-turn-done hidden" id="btn-turn-done">אמרתי ✓</button>
         </div>
-        <p class="muted small">אל תראו את המסך לאחרים! כשמגיע תורכם, אמרו מילה אחת שקשורה למילה.</p>
+        <div class="role-card facedown" id="role-card" role="button" tabindex="0">
+          <div class="role-emoji" id="role-emoji">🎭</div>
+          <div class="role-label" id="role-label">התפקיד שלך מוסתר</div>
+          <div class="role-word" id="role-word">🤫</div>
+          <div class="role-sub" id="role-sub">לחצו על הכרטיס כדי לחשוף</div>
+        </div>
+        <p class="muted small" id="role-hint">לחיצה על הכרטיס חושפת ומסתירה — כך אפשר להניח את הטלפון בבטחה.</p>
       </div>
 
       <!-- הצבעה -->
@@ -221,10 +231,12 @@
   </div>
 
   <button id="btn-exit" class="exit-btn hidden" title="יציאה מהמשחק">✕</button>
+  <button id="btn-sound" class="sound-btn" title="צלילים ורטט">🔊</button>
 
   <div id="toast" class="toast"></div>
 
   <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/sfx.js"></script>
   <script src="/js/app.js"></script>
 </body>
 </html>

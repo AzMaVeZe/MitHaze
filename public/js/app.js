@@ -3,6 +3,7 @@
   'use strict';
 
   const socket = io();
+  const SFX = window.SFX || { play() {}, toggle() {}, enabled: false };
   const AVATARS = ['🦊', '🐼', '🦁', '🐸', '🦉', '🐙', '🦄', '🐝', '🐨', '🦖', '🐧', '🦋', '🐬', '🦔', '🐢', '🦩', '🐰', '🐷', '🐵', '🦇'];
 
   const S = {
@@ -12,6 +13,8 @@
     myId: null,        // playerId (player)
     pub: null,         // publicState אחרון
     myRole: null,      // {isImposter, word, categoryName, emoji}
+    roleRevealed: false, // האם כרטיס התפקיד חשוף כרגע (ברירת מחדל: מוסתר)
+    lastTurnId: null,  // למעקב אחרי החלפת תור (צליל/רטט)
     selectedVote: null,
     settings: { imposterCount: 1, categoryId: 'all', imposterSeesCategory: true },
   };
@@ -58,6 +61,38 @@
     clearSession();
     location.href = '/';
   });
+
+  // ---------- צליל ורטט ----------
+  function renderSoundBtn() {
+    const b = el('btn-sound');
+    b.textContent = SFX.enabled ? '🔊' : '🔇';
+    b.classList.toggle('muted', !SFX.enabled);
+  }
+  el('btn-sound').addEventListener('click', () => {
+    SFX.toggle();
+    renderSoundBtn();
+    if (SFX.enabled) SFX.play('tap');
+  });
+  renderSoundBtn();
+
+  // ---------- חשיפה/הסתרה של כרטיס התפקיד ----------
+  function toggleRoleCard() {
+    if (!S.myRole) return;
+    S.roleRevealed = !S.roleRevealed;
+    SFX.play('tap');
+    if (S.role === 'host') renderHostReveal();
+    else renderPlayerRole();
+  }
+  for (const id of ['role-card', 'host-role-card']) {
+    el(id).addEventListener('click', toggleRoleCard);
+    el(id).addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleRoleCard(); }
+    });
+  }
+
+  // ---------- תורות ----------
+  el('btn-turn-done').addEventListener('click', () => socket.emit('turn:done'));
+  el('btn-host-next-turn').addEventListener('click', () => socket.emit('turn:done'));
 
   // ---------- בית ----------
   el('btn-goto-create').addEventListener('click', () => {
@@ -209,6 +244,36 @@
     } catch (_) {}
   }
 
+  // מציג את תוכן כרטיס תפקיד (משותף לשחקן ולמנחה-משתתף).
+  // במצב מוסתר הכרטיס נראה זהה לחלוטין אצל כולם — בלי רמז לתפקיד.
+  function paintRoleCard(prefix) {
+    const card = el(prefix + 'role-card');
+    const r = S.myRole;
+    if (!S.roleRevealed) {
+      card.className = 'role-card facedown';
+      el(prefix + 'role-emoji').textContent = '🎭';
+      el(prefix + 'role-label').textContent = 'התפקיד שלך מוסתר';
+      el(prefix + 'role-word').textContent = '🤫';
+      el(prefix + 'role-sub').textContent = 'לחצו על הכרטיס כדי לחשוף';
+      return;
+    }
+    if (r.isImposter) {
+      card.className = 'role-card imposter';
+      el(prefix + 'role-emoji').textContent = '🕵️';
+      el(prefix + 'role-label').textContent = 'אתה…';
+      el(prefix + 'role-word').textContent = 'המתחזה';
+      el(prefix + 'role-sub').textContent = (r.categoryName
+        ? `רמז: הקטגוריה היא "${r.categoryName}". בלף בחוכמה!`
+        : 'אתה לא יודע את המילה. בלף בחוכמה!') + ' · לחצו להסתרה';
+    } else {
+      card.className = 'role-card crew';
+      el(prefix + 'role-emoji').textContent = r.emoji || '🤫';
+      el(prefix + 'role-label').textContent = 'המילה הסודית שלך';
+      el(prefix + 'role-word').textContent = r.word;
+      el(prefix + 'role-sub').textContent = (r.categoryName ? `קטגוריה: ${r.categoryName} · ` : '') + 'לחצו להסתרה';
+    }
+  }
+
   function renderHostReveal() {
     const p = S.pub;
     el('host-reveal-emoji').textContent = p.round?.emoji || '🎭';
@@ -216,31 +281,25 @@
     // כרטיס התפקיד של המנחה עצמו (אם משתתף)
     const card = el('host-role-card');
     if (p.hostPlays && S.myRole) {
-      card.classList.remove('hidden');
-      const r = S.myRole;
-      if (r.isImposter) {
-        card.className = 'role-card imposter';
-        el('host-role-emoji').textContent = '🕵️';
-        el('host-role-label').textContent = 'אתה…';
-        el('host-role-word').textContent = 'המתחזה';
-        el('host-role-sub').textContent = r.categoryName ? `רמז: "${r.categoryName}". בלף בחוכמה!` : 'אתה לא יודע את המילה. בלף בחוכמה!';
-      } else {
-        card.className = 'role-card crew';
-        el('host-role-emoji').textContent = r.emoji || '🤫';
-        el('host-role-label').textContent = 'המילה הסודית שלך';
-        el('host-role-word').textContent = r.word;
-        el('host-role-sub').textContent = r.categoryName ? `קטגוריה: ${r.categoryName}` : '';
-      }
+      paintRoleCard('host-');
     } else {
-      card.classList.add('hidden');
+      card.className = 'role-card facedown hidden';
     }
+
+    // חיווי תור
+    const byId = Object.fromEntries(p.players.map((x) => [x.id, x]));
+    const cur = p.round?.currentTurnId;
+    el('host-now-playing').textContent = cur
+      ? `🎙️ עכשיו בתור: ${avatarFor(cur)} ${byId[cur]?.name || ''}`
+      : '';
+    const myTurn = p.hostPlays && cur && cur === S.myId;
+    el('host-turn-banner').classList.toggle('hidden', !myTurn);
 
     const order = el('host-turn-order');
     order.innerHTML = '';
-    const byId = Object.fromEntries(p.players.map((x) => [x.id, x]));
     (p.round?.order || []).forEach((id, i) => {
       const d = document.createElement('div');
-      d.className = 'to-item' + (i === 0 ? ' first' : '');
+      d.className = 'to-item' + (i === p.round.turnIndex ? ' current' : '');
       const pl = byId[id];
       d.textContent = `${i + 1}. ${avatarFor(id)} ${pl ? pl.name : ''}`;
       order.appendChild(d);
@@ -382,29 +441,36 @@
   function renderPlayerRole() {
     const r = S.myRole;
     const card = el('role-card');
+
+    // חיווי תור לשחקן
+    const p = S.pub;
+    const cur = p.round?.currentTurnId;
+    const banner = el('player-turn-banner');
+    if (cur) {
+      banner.classList.remove('hidden');
+      const myTurn = cur === S.myId;
+      banner.classList.toggle('someone-else', !myTurn);
+      if (myTurn) {
+        el('player-turn-text').textContent = '🎙️ תורך! אמרו מילה אחת שקשורה למילה';
+        el('btn-turn-done').classList.remove('hidden');
+      } else {
+        const byId = Object.fromEntries(p.players.map((x) => [x.id, x]));
+        el('player-turn-text').textContent = `עכשיו בתור: ${avatarFor(cur)} ${byId[cur]?.name || ''}`;
+        el('btn-turn-done').classList.add('hidden');
+      }
+    } else {
+      banner.classList.add('hidden');
+    }
+
     if (!r) { // עדיין לא הגיע התפקיד
-      card.className = 'role-card';
+      card.className = 'role-card facedown';
       el('role-emoji').textContent = '⏳';
       el('role-word').textContent = '…';
       el('role-label').textContent = 'מקבל תפקיד';
       el('role-sub').textContent = '';
       return;
     }
-    if (r.isImposter) {
-      card.className = 'role-card imposter';
-      el('role-emoji').textContent = '🕵️';
-      el('role-label').textContent = 'אתה…';
-      el('role-word').textContent = 'המתחזה';
-      el('role-sub').textContent = r.categoryName
-        ? `רמז: הקטגוריה היא "${r.categoryName}". בלף בחוכמה!`
-        : 'אתה לא יודע את המילה. בלף בחוכמה!';
-    } else {
-      card.className = 'role-card crew';
-      el('role-emoji').textContent = r.emoji || '🤫';
-      el('role-label').textContent = 'המילה הסודית';
-      el('role-word').textContent = r.word;
-      el('role-sub').textContent = r.categoryName ? `קטגוריה: ${r.categoryName}` : '';
-    }
+    paintRoleCard('');
   }
 
   function renderPlayerVote(iVoted) {
@@ -459,9 +525,51 @@
     return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
+  // ---------- אפקטים לפי שינויי מצב ----------
+  function handleFx(prev, cur) {
+    if (!S.role) return;
+    const prevPhase = prev?.phase;
+
+    if (prevPhase !== cur.phase) {
+      if (cur.phase === 'vote') {
+        SFX.play('vote');
+      } else if (cur.phase === 'results') {
+        if (S.myId && cur.results) {
+          const amImposter = cur.results.imposterIds.includes(S.myId);
+          const won = (cur.results.outcome === 'crew') ? !amImposter : amImposter;
+          SFX.play(won ? 'win' : 'lose');
+        } else {
+          SFX.play('reveal'); // מסך מנחה משותף
+        }
+      }
+    }
+
+    // שחקן הצטרף ללובי (צליל במסך המנחה)
+    if (S.role === 'host' && cur.phase === 'lobby' && prevPhase === 'lobby'
+        && cur.players.length > (prev?.players.length || 0)) {
+      SFX.play('join');
+    }
+
+    // החלפת תור — מי שהתור עבר אליו מקבל צליל ורטט מובחנים
+    if (cur.phase === 'reveal' && cur.round) {
+      if (S.lastTurnId !== cur.round.currentTurnId) {
+        const isNewRound = prevPhase !== 'reveal';
+        S.lastTurnId = cur.round.currentTurnId;
+        if (S.myId && cur.round.currentTurnId === S.myId) {
+          // בתחילת סבב מחכים רגע כדי לא להתנגש בצליל קבלת התפקיד
+          setTimeout(() => SFX.play('turn'), isNewRound ? 900 : 0);
+        }
+      }
+    } else if (cur.phase !== 'reveal') {
+      S.lastTurnId = null;
+    }
+  }
+
   // ---------- אירועי סוקט ----------
   socket.on('room:state', (state) => {
+    const prev = S.pub;
     S.pub = state;
+    handleFx(prev, state);
     if (S.role === 'host') renderHost();
     else if (S.role === 'player') renderPlayer();
   });
@@ -469,6 +577,8 @@
   socket.on('player:role', (role) => {
     S.myRole = role;
     S.selectedVote = null;
+    S.roleRevealed = false; // תפקיד חדש תמיד מתחיל מוסתר
+    SFX.play('role');
     if (S.role === 'player' && S.pub?.phase === 'reveal') renderPlayerRole();
     if (S.role === 'host' && S.pub?.phase === 'reveal') renderHostReveal();
   });
@@ -538,18 +648,33 @@
       setTimeout(() => el('join-name').focus(), 300);
     }
 
-    // אם יש משחק פעיל שמור — מציעים לחזור אליו בבאנר (לא משחזרים אוטומטית).
-    // כשמגיעים מלינק לחדר אחר, הלינק מנצח ולא מציגים את הבאנר.
+    // שחזור משחק שמור. כשמגיעים מלינק לחדר אחר — הלינק מנצח.
+    // אם המשחק באמצע סבב: חוזרים אוטומטית בדיוק לאותה נקודה (הכרטיס נשאר מוסתר).
+    // אם המשחק בלובי: מציעים לחזור בבאנר במסך הפתיחה.
+    // אם החדר כבר לא קיים: מנקים בשקט ונשארים במסך הפתיחה.
     const sess = readSession();
     if (sess?.code && (!S.urlCode || S.urlCode === sess.code)) {
-      el('resume-text').textContent = `🎮 יש לך משחק פעיל — קוד ${sess.code}`;
-      el('resume-banner').classList.remove('hidden');
+      const probe = () => {
+        socket.emit('room:probe', { code: sess.code }, (res) => {
+          if (!res?.exists) { clearSession(); return; }
+          if (res.phase !== 'lobby') { doReconnect(sess); return; }
+          el('resume-text').textContent = `🎮 יש לך משחק פעיל — קוד ${sess.code}`;
+          el('resume-banner').classList.remove('hidden');
+        });
+      };
+      if (socket.connected) probe();
+      else socket.once('connect', probe);
       el('btn-resume').addEventListener('click', () => doReconnect(sess));
       el('btn-resume-dismiss').addEventListener('click', () => {
         clearSession();
         el('resume-banner').classList.add('hidden');
       });
     }
+
+    // חזרה לאפליקציה אחרי מעבר בין אפליקציות — מוודאים שהחיבור חי מיד
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && !socket.connected) socket.connect();
+    });
   }
   init();
 })();
