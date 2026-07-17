@@ -1,0 +1,22 @@
+# מחזיק את השרת ב-Render ער: פינג כל 10 דקות ל-/health.
+# בלי זה, תוכנית החינם של Render מרדימה את השרת אחרי ~15 דקות בלי גולשים —
+# הכניסה הראשונה מחכה ~30-60 שניות ("APPLICATION LOADING") ומשחקים פעילים
+# בזיכרון נמחקים. הפינג שומר אותו ער בתוך מכסת 750 שעות החינם החודשית.
+# להשבתה: מחקו את הקובץ הזה או כבו את ה-workflow בלשונית Actions.
+name: Keep Render awake
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Ping health endpoint
+        run: |
+          curl -fsS --max-time 30 --retry 2 https://mithaze.onrender.com/health \
+            && echo "server is awake" \
+            || echo "ping failed (server may be waking up)"
