@@ -48,8 +48,13 @@
 
   function saveSession() {
     try {
-      localStorage.setItem(SESSION_KEY, JSON.stringify({ role: S.role, code: S.code, token: S.token }));
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ role: S.role, code: S.code, token: S.token, at: Date.now() }));
     } catch (_) {}
+  }
+
+  // מרענן את חותמת הפעילות — כך שחזור אוטומטי קורה רק למשחק שהיינו פעילים בו ממש עכשיו
+  function touchSession() {
+    if (S.role && S.code) saveSession();
   }
   function clearSession() {
     try { localStorage.removeItem(SESSION_KEY); } catch (_) {}
@@ -569,6 +574,7 @@
   socket.on('room:state', (state) => {
     const prev = S.pub;
     S.pub = state;
+    touchSession();
     handleFx(prev, state);
     if (S.role === 'host') renderHost();
     else if (S.role === 'player') renderPlayer();
@@ -649,15 +655,18 @@
     }
 
     // שחזור משחק שמור. כשמגיעים מלינק לחדר אחר — הלינק מנצח.
-    // אם המשחק באמצע סבב: חוזרים אוטומטית בדיוק לאותה נקודה (הכרטיס נשאר מוסתר).
-    // אם המשחק בלובי: מציעים לחזור בבאנר במסך הפתיחה.
-    // אם החדר כבר לא קיים: מנקים בשקט ונשארים במסך הפתיחה.
+    // חוזרים אוטומטית בדיוק לאותה נקודה רק אם המשחק באמצע סבב וגם היינו
+    // פעילים בו ממש לאחרונה (רענון/מעבר אפליקציה באמצע משחק חי).
+    // בכל מקרה אחר — מסך הפתיחה עם באנר "חזרה למשחק", כדי שמשחק ישן
+    // שנשאר תקוע באמצע סבב לא יחטוף את הכתובת הראשית.
+    const RESUME_FRESH_MS = 10 * 60 * 1000;
     const sess = readSession();
     if (sess?.code && (!S.urlCode || S.urlCode === sess.code)) {
+      const isFresh = Date.now() - (sess.at || 0) < RESUME_FRESH_MS;
       const probe = () => {
         socket.emit('room:probe', { code: sess.code }, (res) => {
           if (!res?.exists) { clearSession(); return; }
-          if (res.phase !== 'lobby') { doReconnect(sess); return; }
+          if (res.phase !== 'lobby' && isFresh) { doReconnect(sess); return; }
           el('resume-text').textContent = `🎮 יש לך משחק פעיל — קוד ${sess.code}`;
           el('resume-banner').classList.remove('hidden');
         });
