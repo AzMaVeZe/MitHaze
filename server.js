@@ -20,6 +20,7 @@ import {
   startRound,
   beginVoting,
   advanceTurn,
+  addClue,
   castVote,
   allVoted,
   tallyResults,
@@ -275,6 +276,15 @@ io.on('connection', (socket) => {
     const isCurrent = socket.data.playerId === currentTurnId;
     if (!isHost && !isCurrent) return;
     if (advanceTurn(room)) broadcastRoom(room);
+  });
+
+  // --- רמז כתוב: השחקן שבתור שולח את המילה שאמר ---
+  socket.on('clue:submit', (payload) => {
+    const room = getRoom(socket.data.code);
+    if (!room || !socket.data.playerId) return;
+    if (addClue(room, socket.data.playerId, payload?.text)) {
+      broadcastRoom(room);
+    }
   });
 
   // --- שחקן מצביע ---

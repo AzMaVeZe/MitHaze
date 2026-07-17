@@ -99,6 +99,31 @@
   el('btn-turn-done').addEventListener('click', () => socket.emit('turn:done'));
   el('btn-host-next-turn').addEventListener('click', () => socket.emit('turn:done'));
 
+  // ---------- רמזים כתובים ----------
+  function sendClue(inputId) {
+    const input = el(inputId);
+    const text = input.value.trim();
+    if (!text) return;
+    socket.emit('clue:submit', { text });
+    input.value = '';
+    SFX.play('tap');
+  }
+  el('btn-clue-send').addEventListener('click', () => sendClue('clue-input'));
+  el('btn-host-clue-send').addEventListener('click', () => sendClue('host-clue-input'));
+  el('clue-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendClue('clue-input'); });
+  el('host-clue-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendClue('host-clue-input'); });
+
+  // רשימת הרמזים שנאמרו — מוצגת לכולם
+  function renderClues(containerId) {
+    const box = el(containerId);
+    const clues = S.pub?.round?.clues || [];
+    if (!S.pub?.settings?.typedClues || clues.length === 0) { box.innerHTML = ''; return; }
+    const byId = Object.fromEntries(S.pub.players.map((x) => [x.id, x]));
+    box.innerHTML = '<div class="clues-title">📝 מה נאמר עד עכשיו</div>' + clues.map((c) =>
+      `<span class="clue-chip"><b>${avatarFor(c.playerId)} ${escapeHtml(byId[c.playerId]?.name || '?')}:</b> ${escapeHtml(c.text)}</span>`
+    ).join('');
+  }
+
   // ---------- בית ----------
   el('btn-goto-create').addEventListener('click', () => {
     loadCategories();
@@ -160,6 +185,7 @@
   el('btn-create').addEventListener('click', () => {
     S.settings.categoryId = el('set-category').value;
     S.settings.imposterSeesCategory = el('set-seescat').checked;
+    S.settings.typedClues = el('set-typedclues').checked;
     const hostPlays = el('set-hostplays').checked;
     const hostName = el('set-hostname').value.trim();
     if (hostPlays && !hostName) return toast('הכניסו את השם שלכם');
@@ -299,6 +325,8 @@
       : '';
     const myTurn = p.hostPlays && cur && cur === S.myId;
     el('host-turn-banner').classList.toggle('hidden', !myTurn);
+    el('host-clue-row').classList.toggle('hidden', !(myTurn && p.settings?.typedClues));
+    renderClues('host-clues');
 
     const order = el('host-turn-order');
     order.innerHTML = '';
@@ -312,6 +340,7 @@
   }
 
   function renderHostVote() {
+    renderClues('host-vote-clues');
     const p = S.pub;
     const roundPlayers = p.players.filter((x) => x.inRound !== false);
     const voted = roundPlayers.filter((x) => x.hasVoted).length;
@@ -488,17 +517,22 @@
       banner.classList.remove('hidden');
       const myTurn = cur === S.myId;
       banner.classList.toggle('someone-else', !myTurn);
+      const typed = !!p.settings?.typedClues;
       if (myTurn) {
         el('player-turn-text').textContent = '🎙️ תורך! אמרו מילה אחת שקשורה למילה';
+        el('player-clue-row').classList.toggle('hidden', !typed);
         el('btn-turn-done').classList.remove('hidden');
+        el('btn-turn-done').textContent = typed ? 'דלג בלי לכתוב ✓' : 'אמרתי ✓';
       } else {
         const byId = Object.fromEntries(p.players.map((x) => [x.id, x]));
         el('player-turn-text').textContent = `עכשיו בתור: ${avatarFor(cur)} ${byId[cur]?.name || ''}`;
+        el('player-clue-row').classList.add('hidden');
         el('btn-turn-done').classList.add('hidden');
       }
     } else {
       banner.classList.add('hidden');
     }
+    renderClues('player-clues');
 
     if (!r) { // עדיין לא הגיע התפקיד
       card.className = 'role-card facedown';
@@ -512,6 +546,7 @@
   }
 
   function renderPlayerVote(iVoted) {
+    renderClues('player-vote-clues');
     const list = el('player-vote-list');
     list.innerHTML = '';
     for (const pl of S.pub.players) {
@@ -718,6 +753,32 @@
     // חזרה לאפליקציה אחרי מעבר בין אפליקציות — מוודאים שהחיבור חי מיד
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden && !socket.connected) socket.connect();
+    });
+
+    initPwa();
+  }
+
+  // ---------- PWA: רישום service worker וכפתור התקנה ----------
+  function initPwa() {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+    let deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      el('btn-install').classList.remove('hidden');
+    });
+    el('btn-install').addEventListener('click', async () => {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      const choice = await deferredPrompt.userChoice.catch(() => null);
+      if (choice?.outcome === 'accepted') el('btn-install').classList.add('hidden');
+      deferredPrompt = null;
+    });
+    window.addEventListener('appinstalled', () => {
+      el('btn-install').classList.add('hidden');
+      toast('מתחזה הותקן! 🎭');
     });
   }
   init();
