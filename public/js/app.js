@@ -24,10 +24,17 @@
   const $$ = (sel) => [...document.querySelectorAll(sel)];
   const el = (id) => document.getElementById(id);
 
-  function avatarFor(id) {
+  // אווטאר לפי האש — רק כגיבוי כשאין עדיין מצב מהשרת
+  function hashAvatar(id) {
     let h = 0;
     for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
     return AVATARS[h % AVATARS.length];
+  }
+
+  // האווטאר האמיתי מגיע מהשרת — ייחודי לכל שחקן בחדר
+  function avatarFor(id) {
+    const p = S.pub?.players?.find((x) => x.id === id);
+    return p?.avatar || hashAvatar(id);
   }
 
   function toast(msg) {
