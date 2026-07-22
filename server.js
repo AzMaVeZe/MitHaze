@@ -22,7 +22,8 @@ import {
   completeTurn,
   addClue,
   castVote,
-  allVoted,
+  submitGuess,
+  roundComplete,
   tallyResults,
   resetToLobby,
   removePlayer,
@@ -287,6 +288,19 @@ io.on('connection', (socket) => {
     }
   });
 
+  // --- מתחזה מנחש את המילה (או מדלג עם text=null) ---
+  socket.on('player:guess', (payload) => {
+    const room = getRoom(socket.data.code);
+    if (!room || !socket.data.playerId) return;
+    if (submitGuess(room, socket.data.playerId, payload?.text ?? null)) {
+      broadcastRoom(room);
+      if (roundComplete(room)) {
+        tallyResults(room);
+        broadcastRoom(room);
+      }
+    }
+  });
+
   // --- שחקן מצביע ---
   socket.on('player:vote', (payload) => {
     const room = getRoom(socket.data.code);
@@ -295,8 +309,8 @@ io.on('connection', (socket) => {
     if (!voterId) return;
     if (castVote(room, voterId, payload?.targetId)) {
       broadcastRoom(room);
-      // אם כולם הצביעו – חשיפה אוטומטית
-      if (allVoted(room)) {
+      // אם כולם סיימו (הצבעה + ניחוש) – חשיפה אוטומטית
+      if (roundComplete(room)) {
         tallyResults(room);
         broadcastRoom(room);
       }

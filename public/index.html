@@ -166,6 +166,7 @@
           <div class="role-label" id="host-role-label">התפקיד שלך מוסתר</div>
           <div class="role-word" id="host-role-word">🤫</div>
           <div class="role-sub" id="host-role-sub">לחצו על הכרטיס כדי לחשוף</div>
+          <div class="role-teammates hidden" id="host-role-teammates"></div>
         </div>
 
         <div class="now-playing" id="host-now-playing"></div>
@@ -188,11 +189,22 @@
         </div>
         <ul class="players-grid compact" id="host-vote-players"></ul>
 
-        <!-- הצבעת המנחה (רק אם הוא משתתף) -->
+        <!-- הצבעת/ניחוש המנחה (רק אם הוא משתתף) -->
         <div class="hidden" id="host-vote-self" style="width:100%">
-          <p class="muted">ההצבעה שלך:</p>
-          <ul class="vote-list" id="host-vote-list"></ul>
-          <div id="host-voted-msg" class="hidden voted-msg">✅ הצבעת! אפשר לחשוף כשכולם סיימו.</div>
+          <div id="host-vote-self-list-box">
+            <p class="muted">ההצבעה שלך:</p>
+            <ul class="vote-list" id="host-vote-list"></ul>
+            <div id="host-voted-msg" class="hidden voted-msg">✅ הצבעת! אפשר לחשוף כשכולם סיימו.</div>
+          </div>
+          <div id="host-guess-section" class="guess-section hidden">
+            <p class="muted">🕵️ אתה המתחזה — נחש את המילה הסודית:</p>
+            <div class="clue-input-row">
+              <input class="input clue-input" id="host-guess-input" placeholder="הניחוש שלך…" maxlength="30" autocomplete="off" />
+              <button class="btn btn-primary" id="btn-host-guess-send">נחש</button>
+            </div>
+            <button class="btn btn-ghost btn-guess-skip" id="btn-host-guess-skip">דלג בלי לנחש</button>
+            <div id="host-guessed-msg" class="hidden voted-msg"></div>
+          </div>
         </div>
 
         <button class="btn btn-secondary" id="btn-host-force-reveal">חשוף תוצאות עכשיו</button>
@@ -206,6 +218,7 @@
           המילה הייתה: <b id="host-word">—</b>
         </div>
         <div class="imposter-reveal" id="host-imposter-reveal"></div>
+        <div class="guess-reveal" id="host-guess-reveal"></div>
         <ul class="tally" id="host-tally"></ul>
         <div class="scoreboard">
           <h3>🏆 לוח תוצאות</h3>
@@ -247,17 +260,33 @@
           <div class="role-label" id="role-label">התפקיד שלך מוסתר</div>
           <div class="role-word" id="role-word">🤫</div>
           <div class="role-sub" id="role-sub">לחצו על הכרטיס כדי לחשוף</div>
+          <div class="role-teammates hidden" id="role-teammates"></div>
         </div>
         <p class="muted small" id="role-hint">לחיצה על הכרטיס חושפת ומסתירה — כך אפשר להניח את הטלפון בבטחה.</p>
       </div>
 
       <!-- הצבעה -->
       <div id="player-vote" class="hidden centered">
-        <div class="phase-badge phase-vote">מי המתחזה?</div>
+        <div class="phase-badge phase-vote" id="player-vote-badge">מי המתחזה?</div>
         <div class="clues-list" id="player-vote-clues"></div>
-        <p class="muted">בחרו את מי אתם חושדים:</p>
-        <ul class="vote-list" id="player-vote-list"></ul>
-        <div id="player-voted-msg" class="hidden voted-msg">✅ ההצבעה נקלטה! מחכים לשאר.</div>
+
+        <!-- הצבעה (צוות + מתחזים מרובים) -->
+        <div id="player-vote-section" style="width:100%;display:flex;flex-direction:column;align-items:center;gap:16px">
+          <p class="muted" id="player-vote-prompt">בחרו את מי אתם חושדים:</p>
+          <ul class="vote-list" id="player-vote-list"></ul>
+          <div id="player-voted-msg" class="hidden voted-msg">✅ ההצבעה נקלטה! מחכים לשאר.</div>
+        </div>
+
+        <!-- ניחוש מילה (מתחזה בלבד) -->
+        <div id="player-guess-section" class="guess-section hidden">
+          <p class="muted">🕵️ אתה המתחזה — נחש את המילה הסודית:</p>
+          <div class="clue-input-row">
+            <input class="input clue-input" id="guess-input" placeholder="הניחוש שלך…" maxlength="30" autocomplete="off" />
+            <button class="btn btn-primary" id="btn-guess-send">נחש</button>
+          </div>
+          <button class="btn btn-ghost btn-guess-skip" id="btn-guess-skip">דלג בלי לנחש</button>
+          <div id="player-guessed-msg" class="hidden voted-msg"></div>
+        </div>
       </div>
 
       <!-- תוצאות -->
@@ -266,6 +295,7 @@
         <h2 id="player-result-title">—</h2>
         <div class="reveal-word">המילה: <b id="player-word">—</b></div>
         <div class="imposter-reveal" id="player-imposter-reveal"></div>
+        <div class="guess-reveal" id="player-guess-reveal"></div>
         <div class="my-score" id="player-my-score"></div>
         <div class="scoreboard">
           <h3>🏆 לוח תוצאות</h3>
