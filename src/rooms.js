@@ -137,6 +137,9 @@ export function startRound(room) {
     p.isImposter = imposterIds.has(p.id);
     p.hasVoted = false;
     p.votedFor = null;
+    p.guessed = false;      // האם המתחזה כבר שלח ניחוש/דילג
+    p.guess = null;         // תוכן הניחוש (או null אם דילג)
+    p.guessCorrect = false; // האם הניחוש היה נכון
   }
 
   // סדר תורים אקראי למתן רמזים
@@ -215,16 +218,53 @@ export function castVote(room, voterId, targetId) {
   if (!voter || !target || !voter.connected) return false;
   // רק משתתפי הסבב הנוכחי מצביעים, ורק על משתתפי הסבב
   if (!room.round.order.includes(voterId) || !room.round.order.includes(targetId)) return false;
+  // מתחזה יחיד לא מצביע (אין לו את מי לגלות); רק מנחש מילה
+  if (voter.isImposter && room.round.imposterIds.length === 1) return false;
   room.round.votes[voterId] = targetId;
   voter.hasVoted = true;
   voter.votedFor = targetId;
   return true;
 }
 
-export function allVoted(room) {
-  // סופרים רק את משתתפי הסבב הנוכחי (מצטרפים מאוחרים ממתינים לסבב הבא)
-  const active = connectedPlayers(room).filter((p) => room.round?.order.includes(p.id));
-  return active.length > 0 && active.every((p) => p.hasVoted);
+// נרמול מילה להשוואת ניחוש: מסיר רווחים מיותרים, גרשיים ופיסוק.
+function normalizeWord(s) {
+  return String(s || '')
+    .trim()
+    .replace(/[׳״'"`.,!?־–-]/g, '')
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
+// המתחזה מנסה לנחש את המילה (או מדלג עם text=null). ניחוש נכון יזוכה בתוצאות.
+export function submitGuess(room, playerId, text) {
+  if (room.phase !== 'vote' || !room.round) return false;
+  const player = room.players.get(playerId);
+  if (!player || !player.connected) return false;
+  if (!player.isImposter || !room.round.order.includes(playerId)) return false;
+  const raw = text == null ? null : String(text).trim().slice(0, 30);
+  player.guess = raw || null;
+  player.guessed = true;
+  player.guessCorrect = !!raw && normalizeWord(raw) === normalizeWord(room.round.word);
+  return true;
+}
+
+// האם שחקן ספציפי סיים את פעולתו בשלב ההצבעה:
+// - צוות: הצביע.
+// - מתחזה יחיד: ניחש/דילג.
+// - מתחזה מרובה: גם הצביע וגם ניחש/דילג.
+export function playerDone(room, p) {
+  if (!room.round || !room.round.order.includes(p.id)) return false;
+  const soleImposter = room.round.imposterIds.length === 1;
+  if (p.isImposter) return soleImposter ? p.guessed : (p.hasVoted && p.guessed);
+  return p.hasVoted;
+}
+
+// השלב מסתיים כשכל שחקן בסבב סיים את פעולתו.
+export function roundComplete(room) {
+  if (!room.round) return false;
+  const active = connectedPlayers(room).filter((p) => room.round.order.includes(p.id));
+  if (active.length === 0) return false;
+  return active.every((p) => playerDone(room, p));
 }
 
 // מסכם את הסבב: סופר קולות, מכריע מי הודח, מעדכן ניקוד.
@@ -259,9 +299,20 @@ export function tallyResults(room) {
     const imp = room.players.get(impId);
     if (imp && impId !== ejectedId) deltas[impId] = (deltas[impId] || 0) + 2;
   }
+  // בונוס: מתחזה שניחש נכון את המילה מקבל +1
+  for (const impId of imposterIds) {
+    const imp = room.players.get(impId);
+    if (imp && imp.guessCorrect) deltas[impId] = (deltas[impId] || 0) + 1;
+  }
   for (const [pid, d] of Object.entries(deltas)) {
     room.players.get(pid).score += d;
   }
+
+  // חשיפת ניחושי המתחזים בתוצאות
+  const guesses = imposterIds.map((id) => {
+    const imp = room.players.get(id);
+    return { id, guess: imp?.guess ?? null, correct: !!imp?.guessCorrect };
+  });
 
   const results = {
     round: room.roundNumber,
@@ -273,6 +324,7 @@ export function tallyResults(room) {
     ejectedId,
     isTie,
     imposterIds,
+    guesses,
     crewCaughtImposter,
     outcome: crewCaughtImposter ? 'crew' : 'imposter',
   };
@@ -295,6 +347,9 @@ export function resetToLobby(room) {
     p.isImposter = false;
     p.hasVoted = false;
     p.votedFor = null;
+    p.guessed = false;
+    p.guess = null;
+    p.guessCorrect = false;
   }
 }
 
@@ -323,6 +378,9 @@ export function publicState(room) {
     avatar: p.avatar,
     connected: p.connected,
     hasVoted: p.hasVoted,
+    guessed: p.guessed,
+    // "סיים את התור בשלב ההצבעה" — לא חושף אם מתחזה, רק אם השלים פעולה
+    done: room.phase === 'vote' ? playerDone(room, p) : p.hasVoted,
     score: p.score,
     inRound: room.round ? room.round.order.includes(p.id) : true,
   }));
@@ -365,11 +423,16 @@ export function privateRole(room, playerId) {
   // מצטרף מאוחר לא משתתף בסבב הנוכחי — אסור לחשוף לו את המילה
   if (!room.round.order.includes(playerId)) return null;
   if (player.isImposter) {
+    // כשיש כמה מתחזים — כל אחד יודע מי חבריו (שמות בלבד)
+    const teammates = room.round.imposterIds
+      .filter((id) => id !== playerId)
+      .map((id) => ({ id, name: room.players.get(id)?.name || '?' }));
     return {
       isImposter: true,
       word: null,
       categoryName: room.settings.imposterSeesCategory ? room.round.categoryName : null,
       emoji: room.round.emoji,
+      teammates,
     };
   }
   return {

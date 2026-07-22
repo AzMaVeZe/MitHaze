@@ -12,10 +12,11 @@
     token: null,       // hostToken (host) / playerId (player)
     myId: null,        // playerId (player)
     pub: null,         // publicState אחרון
-    myRole: null,      // {isImposter, word, categoryName, emoji}
+    myRole: null,      // {isImposter, word, categoryName, emoji, teammates}
     roleRevealed: false, // האם כרטיס התפקיד חשוף כרגע (ברירת מחדל: מוסתר)
     lastTurnId: null,  // למעקב אחרי החלפת תור (צליל/רטט)
     selectedVote: null,
+    myGuessNote: null, // הודעת סטטוס אחרי שליחת/דילוג ניחוש
     settings: { imposterCount: 1, categoryId: 'all', imposterSeesCategory: true },
   };
 
@@ -119,6 +120,43 @@
   el('btn-host-clue-send').addEventListener('click', () => sendClue('host-clue-input'));
   el('clue-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendClue('clue-input'); });
   el('host-clue-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendClue('host-clue-input'); });
+
+  // ---------- ניחוש מילה (מתחזה) ----------
+  function sendGuess(inputId) {
+    const text = el(inputId).value.trim();
+    if (!text) return;
+    S.myGuessNote = `✅ ניחשת: "${text}". מחכים לתוצאות.`;
+    socket.emit('player:guess', { text });
+    SFX.play('tap');
+  }
+  function skipGuess() {
+    if (!confirm('לדלג בלי לנחש?')) return;
+    S.myGuessNote = 'דילגת על הניחוש.';
+    socket.emit('player:guess', { text: null });
+  }
+  el('btn-guess-send').addEventListener('click', () => sendGuess('guess-input'));
+  el('btn-host-guess-send').addEventListener('click', () => sendGuess('host-guess-input'));
+  el('guess-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendGuess('guess-input'); });
+  el('host-guess-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendGuess('host-guess-input'); });
+  el('btn-guess-skip').addEventListener('click', skipGuess);
+  el('btn-host-guess-skip').addEventListener('click', skipGuess);
+
+  // מצב תיבת הניחוש (שנשלח → הסתר קלט והצג הודעה)
+  function renderGuessState(sectionId, msgId, me) {
+    const section = el(sectionId);
+    const inputRow = section.querySelector('.clue-input-row');
+    const skipBtn = section.querySelector('.btn-guess-skip');
+    const msg = el(msgId);
+    const done = !!me?.guessed;
+    if (inputRow) inputRow.classList.toggle('hidden', done);
+    if (skipBtn) skipBtn.classList.toggle('hidden', done);
+    if (done) {
+      msg.textContent = S.myGuessNote || '✅ הניחוש נשלח! מחכים לתוצאות.';
+      msg.classList.remove('hidden');
+    } else {
+      msg.classList.add('hidden');
+    }
+  }
 
   // רשימת הרמזים שנאמרו — מוצגת לכולם.
   // מקובץ לפי שחקן: כל המילים של אותו שחקן מופיעות יחד באותו צ'יפ.
@@ -296,6 +334,7 @@
   // במצב מוסתר הכרטיס נראה זהה לחלוטין אצל כולם — בלי רמז לתפקיד.
   function paintRoleCard(prefix) {
     const card = el(prefix + 'role-card');
+    const mates = el(prefix + 'role-teammates');
     const r = S.myRole;
     if (!S.roleRevealed) {
       card.className = 'role-card facedown';
@@ -303,6 +342,7 @@
       el(prefix + 'role-label').textContent = 'התפקיד שלך מוסתר';
       el(prefix + 'role-word').textContent = '🤫';
       el(prefix + 'role-sub').textContent = 'לחצו על הכרטיס כדי לחשוף';
+      if (mates) mates.classList.add('hidden');
       return;
     }
     if (r.isImposter) {
@@ -313,12 +353,23 @@
       el(prefix + 'role-sub').textContent = (r.categoryName
         ? `רמז: הקטגוריה היא "${r.categoryName}". בלף בחוכמה!`
         : 'אתה לא יודע את המילה. בלף בחוכמה!') + ' · לחצו להסתרה';
+      // שותפים למתחזה (רק כשיש כמה מתחזים)
+      if (mates) {
+        if (r.teammates && r.teammates.length) {
+          const names = r.teammates.map((t) => `${avatarFor(t.id)} ${escapeHtml(t.name)}`).join(', ');
+          mates.innerHTML = `🤝 שותפיך למתחזה: <span class="mate">${names}</span>`;
+          mates.classList.remove('hidden');
+        } else {
+          mates.classList.add('hidden');
+        }
+      }
     } else {
       card.className = 'role-card crew';
       el(prefix + 'role-emoji').textContent = r.emoji || '🤫';
       el(prefix + 'role-label').textContent = 'המילה הסודית שלך';
       el(prefix + 'role-word').textContent = r.word;
       el(prefix + 'role-sub').textContent = (r.categoryName ? `קטגוריה: ${r.categoryName} · ` : '') + 'לחצו להסתרה';
+      if (mates) mates.classList.add('hidden');
     }
   }
 
@@ -360,35 +411,29 @@
     renderClues('host-vote-clues');
     const p = S.pub;
     const roundPlayers = p.players.filter((x) => x.inRound !== false);
-    const voted = roundPlayers.filter((x) => x.hasVoted).length;
+    const done = roundPlayers.filter((x) => x.done).length;
     const total = roundPlayers.filter((x) => x.connected).length;
-    el('host-vote-text').textContent = `${voted} / ${total} הצביעו`;
-    el('host-vote-fill').style.width = total ? `${(voted / total) * 100}%` : '0%';
+    el('host-vote-text').textContent = `${done} / ${total} סיימו`;
+    el('host-vote-fill').style.width = total ? `${(done / total) * 100}%` : '0%';
     const grid = el('host-vote-players');
     grid.innerHTML = '';
     for (const pl of roundPlayers) grid.appendChild(playerChip(pl, false));
 
-    // הצבעת המנחה עצמו (אם משתתף)
+    // הצבעת/ניחוש המנחה עצמו (אם משתתף)
     const selfBox = el('host-vote-self');
     if (p.hostPlays && S.myId) {
       selfBox.classList.remove('hidden');
-      const iVoted = !!p.players.find((x) => x.id === S.myId)?.hasVoted;
-      const list = el('host-vote-list');
-      list.innerHTML = '';
-      for (const pl of p.players) {
-        if (pl.id === S.myId) continue;
-        if (pl.inRound === false) continue;
-        const b = document.createElement('button');
-        b.innerHTML = `<span>${avatarFor(pl.id)}</span><span>${escapeHtml(pl.name)}</span>`;
-        if (S.selectedVote === pl.id) b.classList.add('selected');
-        b.disabled = iVoted;
-        b.addEventListener('click', () => {
-          S.selectedVote = pl.id;
-          socket.emit('player:vote', { targetId: pl.id });
-        });
-        list.appendChild(b);
+      const me = p.players.find((x) => x.id === S.myId);
+      const r = S.myRole;
+      const isImposter = !!r?.isImposter;
+      const soleImposter = isImposter && (!r.teammates || r.teammates.length === 0);
+      el('host-vote-self-list-box').classList.toggle('hidden', soleImposter);
+      if (!soleImposter) {
+        buildVoteList('host-vote-list', r);
+        el('host-voted-msg').classList.toggle('hidden', !me?.hasVoted);
       }
-      el('host-voted-msg').classList.toggle('hidden', !iVoted);
+      el('host-guess-section').classList.toggle('hidden', !isImposter);
+      if (isImposter) renderGuessState('host-guess-section', 'host-guessed-msg', me);
     } else {
       selfBox.classList.add('hidden');
     }
@@ -407,6 +452,7 @@
     const byId = Object.fromEntries(p.players.map((x) => [x.id, x]));
     const impNames = r.imposterIds.map((id) => byId[id]?.name || '?').join(', ');
     el('host-imposter-reveal').innerHTML = `המתחזה${r.imposterIds.length > 1 ? 'ים' : ''}: <span class="imp">${impNames}</span>`;
+    el('host-guess-reveal').innerHTML = guessRevealHtml(r, byId);
 
     const tally = el('host-tally');
     tally.innerHTML = '';
@@ -421,6 +467,17 @@
     if (entries.length === 0) tally.innerHTML = '<li>לא היו הצבעות</li>';
 
     renderScoreboard('host-scoreboard', 'host-rounds');
+  }
+
+  // חשיפת ניחושי המתחזים בתוצאות
+  function guessRevealHtml(r, byId) {
+    if (!r.guesses || !r.guesses.length) return '';
+    return r.guesses.map((g) => {
+      const name = byId[g.id]?.name || '?';
+      if (g.correct) return `🎯 ${escapeHtml(name)} ניחש את המילה נכון: <span class="g-ok">${escapeHtml(g.guess)}</span> (+1)`;
+      if (g.guess) return `❌ ${escapeHtml(name)} ניחש: <span class="g-bad">${escapeHtml(g.guess)}</span> — לא נכון`;
+      return `🙈 ${escapeHtml(name)} דילג על הניחוש`;
+    }).join('<br>');
   }
 
   // לוח תוצאות משותף: דירוג מצטבר עם "+X" לסבב האחרון, וטבלה סבב-אחרי-סבב.
@@ -463,14 +520,15 @@
   }
 
   function playerChip(pl, kickable) {
+    const finished = pl.done ?? pl.hasVoted;
     const li = document.createElement('li');
-    li.className = 'player-chip' + (pl.connected ? '' : ' disconnected') + (pl.hasVoted ? ' voted' : '');
+    li.className = 'player-chip' + (pl.connected ? '' : ' disconnected') + (finished ? ' voted' : '');
     const isHost = pl.id === S.pub?.hostPlayerId;
     li.innerHTML = `
       <span class="avatar">${avatarFor(pl.id)}</span>
       <span class="pname">${isHost ? '👑 ' : ''}${escapeHtml(pl.name)}</span>
       ${pl.score ? `<span class="score">${pl.score} נק'</span>` : ''}
-      ${pl.hasVoted ? '<span class="badge-voted">✓</span>' : ''}
+      ${finished ? '<span class="badge-voted">✓</span>' : ''}
     `;
     if (kickable) {
       const k = document.createElement('button');
@@ -568,11 +626,39 @@
 
   function renderPlayerVote(iVoted) {
     renderClues('player-vote-clues');
-    const list = el('player-vote-list');
+    const me = S.pub.players.find((x) => x.id === S.myId);
+    const r = S.myRole;
+    const isImposter = !!r?.isImposter;
+    const soleImposter = isImposter && (!r.teammates || r.teammates.length === 0);
+    const showVote = !soleImposter;   // צוות + מתחזים מרובים מצביעים
+    const showGuess = isImposter;     // כל מתחזה מנחש
+
+    el('player-vote-badge').textContent = isImposter ? '🕵️ תורך לנחש' : 'מי המתחזה?';
+
+    el('player-vote-section').classList.toggle('hidden', !showVote);
+    if (showVote) {
+      el('player-vote-prompt').textContent = isImposter
+        ? 'הצביעו (השותפים שלכם לא ברשימה):'
+        : 'בחרו את מי אתם חושדים:';
+      buildVoteList('player-vote-list', r);
+      el('player-voted-msg').classList.toggle('hidden', !me?.hasVoted);
+    }
+
+    el('player-guess-section').classList.toggle('hidden', !showGuess);
+    if (showGuess) renderGuessState('player-guess-section', 'player-guessed-msg', me);
+  }
+
+  // בונה רשימת הצבעה (ללא עצמך, ללא מצטרפים מאוחרים, ללא שותפים למתחזה)
+  function buildVoteList(listId, myRole) {
+    const list = el(listId);
     list.innerHTML = '';
+    const me = S.pub.players.find((x) => x.id === S.myId);
+    const iVoted = !!me?.hasVoted;
+    const mateIds = new Set((myRole?.teammates || []).map((t) => t.id));
     for (const pl of S.pub.players) {
-      if (pl.id === S.myId) continue; // אי אפשר להצביע לעצמך
-      if (pl.inRound === false) continue; // מצטרפים מאוחרים לא בסבב הזה
+      if (pl.id === S.myId) continue;
+      if (pl.inRound === false) continue;
+      if (mateIds.has(pl.id)) continue;
       const b = document.createElement('button');
       b.innerHTML = `<span>${avatarFor(pl.id)}</span><span>${escapeHtml(pl.name)}</span>`;
       if (S.selectedVote === pl.id) b.classList.add('selected');
@@ -580,11 +666,9 @@
       b.addEventListener('click', () => {
         S.selectedVote = pl.id;
         socket.emit('player:vote', { targetId: pl.id });
-        renderPlayerVote(true);
       });
       list.appendChild(b);
     }
-    el('player-voted-msg').classList.toggle('hidden', !iVoted);
   }
 
   function renderPlayerResults() {
@@ -605,6 +689,7 @@
     const impNames = r.imposterIds.map((id) => byId[id]?.name || '?').join(', ');
     el('player-imposter-reveal').innerHTML = `המתחזה${r.imposterIds.length > 1 ? 'ים' : ''}: <span class="imp">${impNames}</span>` +
       (amImposter ? ' <b>(זה אתה!)</b>' : '');
+    el('player-guess-reveal').innerHTML = guessRevealHtml(r, byId);
     const d = r.deltas?.[S.myId] || 0;
     el('player-my-score').textContent = me ? `הניקוד שלך: ${me.score}${d ? ` (+${d} בסבב הזה)` : ''}` : '';
     renderScoreboard('player-scoreboard', 'player-rounds');
@@ -665,6 +750,13 @@
   socket.on('room:state', (state) => {
     const prev = S.pub;
     S.pub = state;
+    // איפוס מצב UI פעם אחת לכל סבב חדש (לא בכל שידור מחדש בזמן הצבעה)
+    if (state.roundNumber !== S.lastRoundNumber) {
+      S.lastRoundNumber = state.roundNumber;
+      S.roleRevealed = false;   // תפקיד חדש מתחיל מוסתר
+      S.myGuessNote = null;
+      S.selectedVote = null;
+    }
     touchSession();
     handleFx(prev, state);
     if (S.role === 'host') renderHost();
@@ -673,11 +765,15 @@
 
   socket.on('player:role', (role) => {
     S.myRole = role;
-    S.selectedVote = null;
-    S.roleRevealed = false; // תפקיד חדש תמיד מתחיל מוסתר
-    SFX.play('role');
+    // צליל קבלת תפקיד — פעם אחת לכל סבב בלבד
+    if (S.pub && S.roleSoundRound !== S.pub.roundNumber) {
+      S.roleSoundRound = S.pub.roundNumber;
+      SFX.play('role');
+    }
     if (S.role === 'player' && S.pub?.phase === 'reveal') renderPlayerRole();
     if (S.role === 'host' && S.pub?.phase === 'reveal') renderHostReveal();
+    // בשלב ההצבעה — לרענן כדי לדעת אם מתחזה (ניחוש) ומי השותפים
+    if (S.pub?.phase === 'vote') { if (S.role === 'host') renderHostVote(); else renderPlayerVote(); }
   });
 
   socket.on('player:kicked', () => {
