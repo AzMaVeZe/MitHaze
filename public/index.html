@@ -70,40 +70,17 @@
       <p class="foot-note">בונים חבורה, מגלים מי המתחזה שלא יודע את המילה הסודית.</p>
     </section>
 
-    <!-- מסך יצירת משחק (הגדרות) -->
+    <!-- מסך יצירת משחק -->
     <section class="screen" id="screen-create">
       <div class="card stack">
-        <h2>הגדרות המשחק</h2>
-        <label class="field">
-          <span>קטגוריה</span>
-          <select class="input" id="set-category">
-            <option value="all">הכול מעורבב 🎲</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>מספר מתחזים</span>
-          <div class="segmented" id="set-imposters">
-            <button type="button" data-val="1" class="active">1</button>
-            <button type="button" data-val="2">2</button>
-            <button type="button" data-val="3">3</button>
-          </div>
-        </label>
-        <label class="switch-row">
-          <span>המתחזה רואה את הקטגוריה</span>
-          <input type="checkbox" id="set-seescat" checked />
-          <span class="switch"></span>
-        </label>
-        <label class="switch-row">
-          <span>רמזים כתובים שכולם רואים 📝</span>
-          <input type="checkbox" id="set-typedclues" checked />
-          <span class="switch"></span>
-        </label>
+        <h2>משחק חדש</h2>
+        <input class="input" id="set-hostname" placeholder="השם שלך במשחק" maxlength="20" />
         <label class="switch-row">
           <span>אני מנחה בלבד, לא משתתף 🎬</span>
           <input type="checkbox" id="set-hostonly" />
           <span class="switch"></span>
         </label>
-        <input class="input" id="set-hostname" placeholder="השם שלך במשחק" maxlength="20" />
+        <p class="muted small">את הקטגוריה, מספר המתחזים ושאר ההגדרות אפשר לבחור ולשנות בכל סבב במסך המנחה.</p>
         <button class="btn btn-primary btn-lg" id="btn-create">צור חדר →</button>
         <button class="btn btn-ghost" id="btn-create-back">חזרה</button>
       </div>
@@ -137,6 +114,34 @@
             <span class="hint" id="host-start-hint"></span>
           </div>
           <ul class="players-grid" id="host-players"></ul>
+        </div>
+
+        <div class="players-panel settings-panel">
+          <h3>⚙️ הגדרות המשחק</h3>
+          <label class="field">
+            <span>קטגוריה</span>
+            <select class="input" id="host-set-category">
+              <option value="all">הכול מעורבב 🎲</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>מספר מתחזים</span>
+            <div class="segmented" id="host-set-imposters">
+              <button type="button" data-val="1" class="active">1</button>
+              <button type="button" data-val="2">2</button>
+              <button type="button" data-val="3">3</button>
+            </div>
+          </label>
+          <label class="switch-row">
+            <span>המתחזה רואה את הקטגוריה</span>
+            <input type="checkbox" id="host-set-seescat" checked />
+            <span class="switch"></span>
+          </label>
+          <label class="switch-row">
+            <span>רמזים כתובים שכולם רואים 📝</span>
+            <input type="checkbox" id="host-set-typedclues" checked />
+            <span class="switch"></span>
+          </label>
         </div>
 
         <div class="host-actions">
@@ -238,6 +243,7 @@
         <div class="big-emoji" id="player-wait-emoji">⏳</div>
         <h2 id="player-name-hi">מחכים למנחה…</h2>
         <p class="muted" id="player-wait-sub">המנחה יתחיל את המשחק בקרוב. השאירו את המסך פתוח.</p>
+        <div class="settings-summary" id="player-settings-summary"></div>
         <div class="mini-players" id="player-lobby-list"></div>
       </div>
 
