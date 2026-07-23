@@ -18,6 +18,17 @@ function pickAvatar(room) {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
+// ערבוב הוגן (Fisher–Yates). לא להשתמש ב-sort(()=>Math.random()-0.5) — הוא מוטה
+// ומשאיר את האיבר הראשון (המנחה, שנוסף ראשון) בראש לעתים קרובות מדי.
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 function genCode() {
   let code;
   do {
@@ -128,8 +139,8 @@ export function startRound(room) {
   const active = connectedPlayers(room);
   const { word, categoryName, emoji } = pickWord(room.settings.categoryId);
 
-  // הגרלת מתחזים
-  const shuffled = [...active].sort(() => Math.random() - 0.5);
+  // הגרלת מתחזים (ערבוב הוגן)
+  const shuffled = shuffle(active);
   const imposterCount = Math.min(room.settings.imposterCount, active.length - 1);
   const imposterIds = new Set(shuffled.slice(0, imposterCount).map((p) => p.id));
 
@@ -142,8 +153,8 @@ export function startRound(room) {
     p.guessCorrect = false; // האם הניחוש היה נכון
   }
 
-  // סדר תורים אקראי למתן רמזים
-  const order = [...active].sort(() => Math.random() - 0.5).map((p) => p.id);
+  // סדר תורים אקראי למתן רמזים (ערבוב הוגן)
+  const order = shuffle(active).map((p) => p.id);
 
   room.roundNumber += 1;
   room.round = {
