@@ -181,7 +181,6 @@
 
   // ---------- בית ----------
   el('btn-goto-create').addEventListener('click', () => {
-    loadCategories();
     showScreen('screen-create');
   });
   el('btn-create-back').addEventListener('click', () => showScreen('screen-home'));
@@ -210,26 +209,23 @@
   }
 
   // ---------- הגדרות / יצירה ----------
-  async function loadCategories() {
-    try {
-      const res = await fetch('/api/categories');
-      const cats = await res.json();
-      const sel = el('set-category');
-      sel.innerHTML = '<option value="all">הכול מעורבב 🎲</option>';
-      for (const c of cats) {
-        const o = document.createElement('option');
-        o.value = c.id; o.textContent = `${c.emoji} ${c.name}`;
-        sel.appendChild(o);
-      }
-    } catch (_) {}
+  // ממלא רשימת קטגוריות ב-select כלשהו (מטמון אחרי הבאה ראשונה)
+  let categoriesCache = null;
+  async function fillCategorySelect(sel) {
+    if (!sel) return;
+    if (!categoriesCache) {
+      try { categoriesCache = await (await fetch('/api/categories')).json(); }
+      catch (_) { categoriesCache = []; }
+    }
+    const current = sel.value;
+    sel.innerHTML = '<option value="all">הכול מעורבב 🎲</option>';
+    for (const c of categoriesCache) {
+      const o = document.createElement('option');
+      o.value = c.id; o.textContent = `${c.emoji} ${c.name}`;
+      sel.appendChild(o);
+    }
+    if (current) sel.value = current;
   }
-
-  el('set-imposters').addEventListener('click', (e) => {
-    const b = e.target.closest('button'); if (!b) return;
-    $$('#set-imposters button').forEach((x) => x.classList.remove('active'));
-    b.classList.add('active');
-    S.settings.imposterCount = parseInt(b.dataset.val, 10);
-  });
 
   // ברירת מחדל: המנחה משתתף. סימון "מנחה בלבד" מסתיר את שדה השם.
   el('set-hostonly').addEventListener('change', (e) => {
@@ -237,14 +233,38 @@
     if (!e.target.checked) el('set-hostname').focus();
   });
 
+  // ---------- הגדרות המשחק בלובי המנחה (חי, בין סבבים) ----------
+  el('host-set-category').addEventListener('change', (e) => {
+    socket.emit('host:updateSettings', { categoryId: e.target.value });
+  });
+  el('host-set-imposters').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    socket.emit('host:updateSettings', { imposterCount: parseInt(b.dataset.val, 10) });
+  });
+  el('host-set-seescat').addEventListener('change', (e) => {
+    socket.emit('host:updateSettings', { imposterSeesCategory: e.target.checked });
+  });
+  el('host-set-typedclues').addEventListener('change', (e) => {
+    socket.emit('host:updateSettings', { typedClues: e.target.checked });
+  });
+
+  // מסנכרן את פקדי ההגדרות בלובי למצב הנוכחי מהשרת
+  function renderHostSettings() {
+    const s = S.pub?.settings; if (!s) return;
+    const sel = el('host-set-category');
+    if (sel.options.length <= 1) fillCategorySelect(sel).then(() => { sel.value = s.categoryId || 'all'; });
+    else sel.value = s.categoryId || 'all';
+    $$('#host-set-imposters button').forEach((x) =>
+      x.classList.toggle('active', parseInt(x.dataset.val, 10) === s.imposterCount));
+    el('host-set-seescat').checked = s.imposterSeesCategory !== false;
+    el('host-set-typedclues').checked = s.typedClues !== false;
+  }
+
   el('btn-create').addEventListener('click', () => {
-    S.settings.categoryId = el('set-category').value;
-    S.settings.imposterSeesCategory = el('set-seescat').checked;
-    S.settings.typedClues = el('set-typedclues').checked;
     const hostPlays = !el('set-hostonly').checked; // ברירת מחדל: משתתף
     const hostName = el('set-hostname').value.trim();
     if (hostPlays && !hostName) return toast('הכניסו את השם שלכם');
-    const payload = { ...S.settings, hostPlays, hostName };
+    const payload = { hostPlays, hostName };
     socket.emit('host:create', payload, (res) => {
       if (!res?.ok) return toast('שגיאה ביצירת חדר');
       S.role = 'host'; S.code = res.code; S.token = res.hostToken; S.pub = res.state;
@@ -312,6 +332,8 @@
     if (players.length === 0) {
       grid.innerHTML = '<li class="hint" style="grid-column:1/-1;text-align:center;padding:20px">מחכים לשחקנים… שתפו את הקוד או ה-QR</li>';
     }
+
+    renderHostSettings();
 
     const btn = el('btn-host-start');
     btn.disabled = !p.canStart;
@@ -571,6 +593,7 @@
       el('player-name-hi').textContent = me ? `${avatarFor(me.id)} שלום ${me.name}!` : 'מחכים למנחה…';
       el('player-wait-sub').textContent = 'המנחה יתחיל את המשחק בקרוב. השאירו את המסך פתוח.';
     }
+    renderSettingsSummary();
     const list = el('player-lobby-list');
     list.innerHTML = '';
     for (const pl of S.pub.players) {
@@ -578,6 +601,22 @@
       s.textContent = `${avatarFor(pl.id)} ${pl.name}`;
       list.appendChild(s);
     }
+  }
+
+  // סיכום הגדרות (קריאה בלבד) למסך ההמתנה של השחקן
+  function renderSettingsSummary() {
+    const box = el('player-settings-summary');
+    const s = S.pub?.settings; if (!box || !s) return;
+    if (!categoriesCache) { fillCategorySelect(document.createElement('select')).then(renderSettingsSummary); }
+    const cat = s.categoryId === 'all' || !s.categoryId
+      ? 'הכול מעורבב 🎲'
+      : (categoriesCache?.find((c) => c.id === s.categoryId)
+          ? `${categoriesCache.find((c) => c.id === s.categoryId).emoji} ${categoriesCache.find((c) => c.id === s.categoryId).name}`
+          : '…');
+    box.innerHTML =
+      `<span>${cat}</span>` +
+      `<span>🕵️ ${s.imposterCount} מתחז${s.imposterCount > 1 ? 'ים' : 'ה'}</span>` +
+      (s.typedClues ? '<span>📝 רמזים כתובים</span>' : '');
   }
 
   function renderPlayerRole() {

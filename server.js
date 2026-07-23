@@ -179,6 +179,7 @@ io.on('connection', (socket) => {
     }
     if (s.categoryId != null) room.settings.categoryId = String(s.categoryId);
     if (s.imposterSeesCategory != null) room.settings.imposterSeesCategory = !!s.imposterSeesCategory;
+    if (s.typedClues != null) room.settings.typedClues = !!s.typedClues;
     broadcastRoom(room);
   });
 
