@@ -231,17 +231,17 @@
     S.settings.imposterCount = parseInt(b.dataset.val, 10);
   });
 
-  // הצגת שדה שם כשהמנחה מסמן שהוא משתתף
-  el('set-hostplays').addEventListener('change', (e) => {
-    el('set-hostname').classList.toggle('hidden', !e.target.checked);
-    if (e.target.checked) el('set-hostname').focus();
+  // ברירת מחדל: המנחה משתתף. סימון "מנחה בלבד" מסתיר את שדה השם.
+  el('set-hostonly').addEventListener('change', (e) => {
+    el('set-hostname').classList.toggle('hidden', e.target.checked);
+    if (!e.target.checked) el('set-hostname').focus();
   });
 
   el('btn-create').addEventListener('click', () => {
     S.settings.categoryId = el('set-category').value;
     S.settings.imposterSeesCategory = el('set-seescat').checked;
     S.settings.typedClues = el('set-typedclues').checked;
-    const hostPlays = el('set-hostplays').checked;
+    const hostPlays = !el('set-hostonly').checked; // ברירת מחדל: משתתף
     const hostName = el('set-hostname').value.trim();
     if (hostPlays && !hostName) return toast('הכניסו את השם שלכם');
     const payload = { ...S.settings, hostPlays, hostName };
