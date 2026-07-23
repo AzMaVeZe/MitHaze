@@ -147,7 +147,7 @@ export function startRound(room) {
   for (const p of room.players.values()) {
     p.isImposter = imposterIds.has(p.id);
     p.hasVoted = false;
-    p.votedFor = null;
+    p.marks = [];           // מי שסימן: צוות=חשודים, מתחזה=ניחוש שותפים
     p.guessed = false;      // האם המתחזה כבר שלח ניחוש/דילג
     p.guess = null;         // תוכן הניחוש (או null אם דילג)
     p.guessCorrect = false; // האם הניחוש היה נכון
@@ -162,12 +162,12 @@ export function startRound(room) {
     categoryName,
     emoji,
     imposterIds: [...imposterIds],
+    imposterCount: imposterIds.size, // מספר המתחזים בפועל בסבב
     order,
     startingPlayerId: order[0],
     turnIndex: 0, // תור מתן הרמזים הנוכחי (אינדקס ב-order)
     turnsDone: 0, // כמה תורות הושלמו — אחרי 2 סבבים מלאים עוברים להצבעה
     clues: [],    // רמזים כתובים לפי סדר: {playerId, text}
-    votes: {}, // voterId -> targetId
     results: null,
   };
   room.phase = 'reveal';
@@ -222,18 +222,29 @@ export function advanceTurn(room) {
   return false;
 }
 
-export function castVote(room, voterId, targetId) {
+// כמה סימונים נדרשים מהשחקן בשלב ההצבעה:
+// - צוות: מסמן את כל המתחזים (imposterCount).
+// - מתחזה: מנחש את שאר המתחזים (imposterCount - 1). מתחזה יחיד → 0 (רק ניחוש מילה).
+export function requiredMarks(room, p) {
+  const k = room.round.imposterCount;
+  return p.isImposter ? k - 1 : k;
+}
+
+// שחקן מסמן את החשודים שלו (צוות) או את השותפים המשוערים (מתחזה).
+// targets — מערך מזהים; חייב להיות בדיוק בגודל הנדרש, ייחודי, בסבב, ולא עצמו.
+export function submitMarks(room, voterId, targets) {
   if (room.phase !== 'vote' || !room.round) return false;
   const voter = room.players.get(voterId);
-  const target = room.players.get(targetId);
-  if (!voter || !target || !voter.connected) return false;
-  // רק משתתפי הסבב הנוכחי מצביעים, ורק על משתתפי הסבב
-  if (!room.round.order.includes(voterId) || !room.round.order.includes(targetId)) return false;
-  // מתחזה יחיד לא מצביע (אין לו את מי לגלות); רק מנחש מילה
-  if (voter.isImposter && room.round.imposterIds.length === 1) return false;
-  room.round.votes[voterId] = targetId;
+  if (!voter || !voter.connected || !room.round.order.includes(voterId)) return false;
+  const need = requiredMarks(room, voter);
+  if (need === 0) return false; // מתחזה יחיד — אין סימון, רק ניחוש מילה
+  const list = Array.isArray(targets) ? [...new Set(targets)] : [];
+  if (list.length !== need) return false;
+  for (const t of list) {
+    if (t === voterId || !room.round.order.includes(t)) return false;
+  }
+  voter.marks = list;
   voter.hasVoted = true;
-  voter.votedFor = targetId;
   return true;
 }
 
@@ -278,51 +289,70 @@ export function roundComplete(room) {
   return active.every((p) => playerDone(room, p));
 }
 
-// מסכם את הסבב: סופר קולות, מכריע מי הודח, מעדכן ניקוד.
+// מסכם את הסבב: סופר את קולות הצוות, מכריע את קבוצת ה"נתפסים", ומעדכן ניקוד.
 export function tallyResults(room) {
-  const { votes, imposterIds } = room.round;
+  const { imposterIds, imposterCount } = room.round;
+  const imposterSet = new Set(imposterIds);
+  const inRound = (id) => room.round.order.includes(id);
+
+  // ספירת סימוני הצוות בלבד (סימוני המתחזים הם ניחוש שותף — לא נספרים כאן)
   const counts = {};
-  for (const targetId of Object.values(votes)) {
-    counts[targetId] = (counts[targetId] || 0) + 1;
+  for (const p of room.players.values()) {
+    if (p.isImposter || !inRound(p.id)) continue;
+    for (const t of p.marks || []) counts[t] = (counts[t] || 0) + 1;
   }
 
-  // מציאת המקסימום
-  let max = 0;
-  for (const c of Object.values(counts)) max = Math.max(max, c);
-  const topVoted = Object.keys(counts).filter((id) => counts[id] === max);
-  const isTie = topVoted.length !== 1;
-  const ejectedId = isTie ? null : topVoted[0];
-  const imposterSet = new Set(imposterIds);
-  const crewCaughtImposter = ejectedId && imposterSet.has(ejectedId);
-
-  // ניקוד:
-  // - צוות שמצביע נכון (למתחזה) מקבל +1
-  // - כל מתחזה ששרד (לא הודח יחיד) מקבל +2
-  // נאספים כ"דלתא לסבב" כדי לבנות לוח תוצאות מצטבר סבב-אחרי-סבב.
-  const deltas = {};
-  for (const [voterId, targetId] of Object.entries(votes)) {
-    const voter = room.players.get(voterId);
-    if (voter && !voter.isImposter && imposterSet.has(targetId)) {
-      deltas[voterId] = (deltas[voterId] || 0) + 1;
+  // קבוצת ה"נתפסים" = k השחקנים עם הכי הרבה קולות; תיקו בגבול → פחות מ-k
+  const sorted = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+  const k = imposterCount;
+  let caughtIds = [];
+  let isTie = false;
+  if (sorted.length) {
+    const boundary = counts[sorted[Math.min(k, sorted.length) - 1]];
+    const above = sorted.filter((id) => counts[id] > boundary);
+    const atBoundary = sorted.filter((id) => counts[id] === boundary);
+    if (sorted.length >= k && above.length + atBoundary.length === k) {
+      caughtIds = [...above, ...atBoundary];
+    } else {
+      isTie = true;
+      caughtIds = above; // רק החד-משמעיים (פחות מ-k)
     }
   }
-  for (const impId of imposterIds) {
-    const imp = room.players.get(impId);
-    if (imp && impId !== ejectedId) deltas[impId] = (deltas[impId] || 0) + 2;
+  const caughtSet = new Set(caughtIds);
+  const crewCaughtImposter = caughtIds.length === k && caughtIds.every((id) => imposterSet.has(id));
+
+  // ניקוד (נאסף כ"דלתא לסבב"):
+  const deltas = {};
+  // צוות: +1 לכל מתחזה אמיתי שסימן
+  for (const p of room.players.values()) {
+    if (p.isImposter || !inRound(p.id)) continue;
+    for (const t of p.marks || []) if (imposterSet.has(t)) deltas[p.id] = (deltas[p.id] || 0) + 1;
   }
-  // בונוס: מתחזה שניחש נכון את המילה מקבל +1
   for (const impId of imposterIds) {
     const imp = room.players.get(impId);
-    if (imp && imp.guessCorrect) deltas[impId] = (deltas[impId] || 0) + 1;
+    if (!imp) continue;
+    // מתחזה: +1 לכל שותף-מתחזה אמיתי שניחש (סעיף א)
+    for (const t of imp.marks || []) if (imposterSet.has(t) && t !== impId) deltas[impId] = (deltas[impId] || 0) + 1;
+    // מתחזה ששרד (לא נתפס): +2
+    if (!caughtSet.has(impId)) deltas[impId] = (deltas[impId] || 0) + 2;
+    // ניחוש מילה נכון: +1
+    if (imp.guessCorrect) deltas[impId] = (deltas[impId] || 0) + 1;
   }
   for (const [pid, d] of Object.entries(deltas)) {
     room.players.get(pid).score += d;
   }
 
-  // חשיפת ניחושי המתחזים בתוצאות
+  // חשיפה: ניחוש מילה + ניחוש שותפים לכל מתחזה
   const guesses = imposterIds.map((id) => {
     const imp = room.players.get(id);
-    return { id, guess: imp?.guess ?? null, correct: !!imp?.guessCorrect };
+    const partnerMarks = (imp?.marks || []).filter((t) => imposterSet.has(t) && t !== id);
+    return {
+      id,
+      guess: imp?.guess ?? null,
+      correct: !!imp?.guessCorrect,
+      partnerMarks: imp?.marks || [],
+      partnerCorrect: partnerMarks.length,
+    };
   });
 
   const results = {
@@ -332,9 +362,11 @@ export function tallyResults(room) {
     categoryName: room.round.categoryName,
     emoji: room.round.emoji,
     counts,
-    ejectedId,
+    caughtIds,
+    ejectedId: k === 1 ? (caughtIds[0] || null) : null, // תאימות לאחור
     isTie,
     imposterIds,
+    imposterCount: k,
     guesses,
     crewCaughtImposter,
     outcome: crewCaughtImposter ? 'crew' : 'imposter',
@@ -357,7 +389,7 @@ export function resetToLobby(room) {
   for (const p of room.players.values()) {
     p.isImposter = false;
     p.hasVoted = false;
-    p.votedFor = null;
+    p.marks = [];
     p.guessed = false;
     p.guess = null;
     p.guessCorrect = false;
@@ -418,6 +450,7 @@ export function publicState(room) {
       clues: room.round.clues,
       clueCycle: Math.min(CLUE_CYCLES, Math.floor(room.round.turnsDone / room.round.order.length) + 1),
       clueCycles: CLUE_CYCLES,
+      imposterCount: room.round.imposterCount,
     };
   }
   // בשלב התוצאות חושפים הכול
@@ -434,16 +467,12 @@ export function privateRole(room, playerId) {
   // מצטרף מאוחר לא משתתף בסבב הנוכחי — אסור לחשוף לו את המילה
   if (!room.round.order.includes(playerId)) return null;
   if (player.isImposter) {
-    // כשיש כמה מתחזים — כל אחד יודע מי חבריו (שמות בלבד)
-    const teammates = room.round.imposterIds
-      .filter((id) => id !== playerId)
-      .map((id) => ({ id, name: room.players.get(id)?.name || '?' }));
+    // המתחזה לא רואה מי חבריו — הוא ינחש בשלב ההצבעה
     return {
       isImposter: true,
       word: null,
       categoryName: room.settings.imposterSeesCategory ? room.round.categoryName : null,
       emoji: room.round.emoji,
-      teammates,
     };
   }
   return {

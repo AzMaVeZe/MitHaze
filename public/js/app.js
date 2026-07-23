@@ -16,6 +16,7 @@
     roleRevealed: false, // האם כרטיס התפקיד חשוף כרגע (ברירת מחדל: מוסתר)
     lastTurnId: null,  // למעקב אחרי החלפת תור (צליל/רטט)
     selectedVote: null,
+    selectedMarks: new Set(), // בחירות רב-סימון (צוות/מתחזה) לפני אישור
     myGuessNote: null, // הודעת סטטוס אחרי שליחת/דילוג ניחוש
     settings: { imposterCount: 1, categoryId: 'all', imposterSeesCategory: true },
   };
@@ -448,10 +449,14 @@
       const me = p.players.find((x) => x.id === S.myId);
       const r = S.myRole;
       const isImposter = !!r?.isImposter;
-      const soleImposter = isImposter && (!r.teammates || r.teammates.length === 0);
-      el('host-vote-self-list-box').classList.toggle('hidden', soleImposter);
-      if (!soleImposter) {
-        buildVoteList('host-vote-list', r);
+      const k = p.round?.imposterCount || 1;
+      const need = isImposter ? k - 1 : k;
+      el('host-vote-self-list-box').classList.toggle('hidden', need < 1);
+      if (need >= 1) {
+        el('host-vote-prompt').textContent = isImposter
+          ? `מי המתחזים האחרים? סמנו ${need}`
+          : (k === 1 ? 'ההצבעה שלך:' : `סמנו את ${k} המתחזים:`);
+        renderMarkList('host-vote-list', 'btn-host-vote-confirm', need, !!me?.hasVoted);
         el('host-voted-msg').classList.toggle('hidden', !me?.hasVoted);
       }
       el('host-guess-section').classList.toggle('hidden', !isImposter);
@@ -463,12 +468,13 @@
 
   function renderHostResults() {
     const p = S.pub, r = p.results; if (!r) return;
+    const multi = (r.imposterCount || 1) > 1;
     const badge = el('host-outcome-badge');
     if (r.outcome === 'crew') { badge.textContent = '🎉 החבורה ניצחה!'; }
-    else { badge.textContent = '🕵️ המתחזה ניצח!'; }
+    else { badge.textContent = multi ? '🕵️ המתחזים ניצחו!' : '🕵️ המתחזה ניצח!'; }
     el('host-outcome-title').textContent = r.crewCaughtImposter
-      ? 'תפסתם את המתחזה!'
-      : (r.isTie ? 'תיקו — אף אחד לא הודח' : 'הדחתם את האדם הלא נכון…');
+      ? (multi ? 'תפסתם את כל המתחזים!' : 'תפסתם את המתחזה!')
+      : (r.isTie ? 'תיקו בהצבעה' : (multi ? 'לא תפסתם את כל המתחזים…' : 'הדחתם את האדם הלא נכון…'));
     el('host-word').textContent = r.word;
 
     const byId = Object.fromEntries(p.players.map((x) => [x.id, x]));
@@ -491,14 +497,22 @@
     renderScoreboard('host-scoreboard', 'host-rounds');
   }
 
-  // חשיפת ניחושי המתחזים בתוצאות
+  // חשיפת ניחושי המתחזים בתוצאות (מילה + שותפים)
   function guessRevealHtml(r, byId) {
     if (!r.guesses || !r.guesses.length) return '';
+    const multi = (r.imposterCount || 1) > 1;
     return r.guesses.map((g) => {
-      const name = byId[g.id]?.name || '?';
-      if (g.correct) return `🎯 ${escapeHtml(name)} ניחש את המילה נכון: <span class="g-ok">${escapeHtml(g.guess)}</span> (+1)`;
-      if (g.guess) return `❌ ${escapeHtml(name)} ניחש: <span class="g-bad">${escapeHtml(g.guess)}</span> — לא נכון`;
-      return `🙈 ${escapeHtml(name)} דילג על הניחוש`;
+      const name = escapeHtml(byId[g.id]?.name || '?');
+      let word;
+      if (g.correct) word = `🎯 ${name} ניחש את המילה נכון: <span class="g-ok">${escapeHtml(g.guess)}</span> (+1)`;
+      else if (g.guess) word = `❌ ${name} ניחש: <span class="g-bad">${escapeHtml(g.guess)}</span> — לא נכון`;
+      else word = `🙈 ${name} דילג על ניחוש המילה`;
+      if (!multi) return word;
+      const marked = (g.partnerMarks || []).map((id) => escapeHtml(byId[id]?.name || '?')).join(', ');
+      const partner = g.partnerCorrect > 0
+        ? ` · 🤝 <span class="g-ok">זיהה שותף נכון (+${g.partnerCorrect})</span>`
+        : ` · 🤷 לא זיהה שותף${marked ? ` (סימן: ${marked})` : ''}`;
+      return word + partner;
     }).join('<br>');
   }
 
@@ -663,23 +677,24 @@
     paintRoleCard('');
   }
 
-  function renderPlayerVote(iVoted) {
+  function renderPlayerVote() {
     renderClues('player-vote-clues');
     const me = S.pub.players.find((x) => x.id === S.myId);
     const r = S.myRole;
     const isImposter = !!r?.isImposter;
-    const soleImposter = isImposter && (!r.teammates || r.teammates.length === 0);
-    const showVote = !soleImposter;   // צוות + מתחזים מרובים מצביעים
-    const showGuess = isImposter;     // כל מתחזה מנחש
+    const k = S.pub.round?.imposterCount || 1;
+    const need = isImposter ? k - 1 : k; // מתחזה מנחש שותפים; צוות מסמן את כל המתחזים
+    const showMarks = need >= 1;
+    const showGuess = isImposter;
 
     el('player-vote-badge').textContent = isImposter ? '🕵️ תורך לנחש' : 'מי המתחזה?';
 
-    el('player-vote-section').classList.toggle('hidden', !showVote);
-    if (showVote) {
+    el('player-vote-section').classList.toggle('hidden', !showMarks);
+    if (showMarks) {
       el('player-vote-prompt').textContent = isImposter
-        ? 'הצביעו (השותפים שלכם לא ברשימה):'
-        : 'בחרו את מי אתם חושדים:';
-      buildVoteList('player-vote-list', r);
+        ? `מי המתחזים האחרים? סמנו ${need}`
+        : (k === 1 ? 'בחרו את מי אתם חושדים:' : `סמנו את ${k} המתחזים:`);
+      renderMarkList('player-vote-list', 'btn-player-vote-confirm', need, !!me?.hasVoted);
       el('player-voted-msg').classList.toggle('hidden', !me?.hasVoted);
     }
 
@@ -687,26 +702,31 @@
     if (showGuess) renderGuessState('player-guess-section', 'player-guessed-msg', me);
   }
 
-  // בונה רשימת הצבעה (ללא עצמך, ללא מצטרפים מאוחרים, ללא שותפים למתחזה)
-  function buildVoteList(listId, myRole) {
+  // רשימת סימון (ללא עצמך/מצטרפים מאוחרים). need=1 → הקשה מיידית; need≥2 → סימון + אישור.
+  function renderMarkList(listId, confirmBtnId, need, locked) {
     const list = el(listId);
     list.innerHTML = '';
-    const me = S.pub.players.find((x) => x.id === S.myId);
-    const iVoted = !!me?.hasVoted;
-    const mateIds = new Set((myRole?.teammates || []).map((t) => t.id));
     for (const pl of S.pub.players) {
-      if (pl.id === S.myId) continue;
-      if (pl.inRound === false) continue;
-      if (mateIds.has(pl.id)) continue;
+      if (pl.id === S.myId || pl.inRound === false) continue;
       const b = document.createElement('button');
       b.innerHTML = `<span>${avatarFor(pl.id)}</span><span>${escapeHtml(pl.name)}</span>`;
-      if (S.selectedVote === pl.id) b.classList.add('selected');
-      b.disabled = iVoted;
+      if (S.selectedMarks.has(pl.id)) b.classList.add('selected');
+      b.disabled = locked;
       b.addEventListener('click', () => {
-        S.selectedVote = pl.id;
-        socket.emit('player:vote', { targetId: pl.id });
+        if (locked) return;
+        if (need === 1) { S.selectedMarks = new Set([pl.id]); socket.emit('player:vote', { targets: [pl.id] }); return; }
+        if (S.selectedMarks.has(pl.id)) S.selectedMarks.delete(pl.id);
+        else if (S.selectedMarks.size < need) S.selectedMarks.add(pl.id);
+        renderMarkList(listId, confirmBtnId, need, locked);
       });
       list.appendChild(b);
+    }
+    const cbtn = el(confirmBtnId);
+    if (cbtn) {
+      cbtn.classList.toggle('hidden', need < 2 || locked);
+      cbtn.disabled = S.selectedMarks.size !== need;
+      cbtn.textContent = `אשר בחירה (${S.selectedMarks.size}/${need})`;
+      cbtn.onclick = () => { if (S.selectedMarks.size === need) socket.emit('player:vote', { targets: [...S.selectedMarks] }); };
     }
   }
 
@@ -795,6 +815,7 @@
       S.roleRevealed = false;   // תפקיד חדש מתחיל מוסתר
       S.myGuessNote = null;
       S.selectedVote = null;
+      S.selectedMarks = new Set();
     }
     touchSession();
     handleFx(prev, state);

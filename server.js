@@ -21,7 +21,7 @@ import {
   beginVoting,
   completeTurn,
   addClue,
-  castVote,
+  submitMarks,
   submitGuess,
   roundComplete,
   tallyResults,
@@ -302,15 +302,19 @@ io.on('connection', (socket) => {
     }
   });
 
-  // --- שחקן מצביע ---
+  // --- שחקן מסמן חשודים / מתחזה מנחש שותפים ---
   socket.on('player:vote', (payload) => {
     const room = getRoom(socket.data.code);
     if (!room) return;
     const voterId = socket.data.playerId;
     if (!voterId) return;
-    if (castVote(room, voterId, payload?.targetId)) {
+    // תמיכה גם בפורמט הישן (targetId יחיד) וגם בחדש (targets מערך)
+    const targets = Array.isArray(payload?.targets)
+      ? payload.targets
+      : (payload?.targetId != null ? [payload.targetId] : []);
+    if (submitMarks(room, voterId, targets)) {
       broadcastRoom(room);
-      // אם כולם סיימו (הצבעה + ניחוש) – חשיפה אוטומטית
+      // אם כולם סיימו (סימון + ניחוש) – חשיפה אוטומטית
       if (roundComplete(room)) {
         tallyResults(room);
         broadcastRoom(room);

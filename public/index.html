@@ -197,8 +197,9 @@
         <!-- הצבעת/ניחוש המנחה (רק אם הוא משתתף) -->
         <div class="hidden" id="host-vote-self" style="width:100%">
           <div id="host-vote-self-list-box">
-            <p class="muted">ההצבעה שלך:</p>
+            <p class="muted" id="host-vote-prompt">ההצבעה שלך:</p>
             <ul class="vote-list" id="host-vote-list"></ul>
+            <button class="btn btn-primary hidden" id="btn-host-vote-confirm">אשר</button>
             <div id="host-voted-msg" class="hidden voted-msg">✅ הצבעת! אפשר לחשוף כשכולם סיימו.</div>
           </div>
           <div id="host-guess-section" class="guess-section hidden">
@@ -276,10 +277,11 @@
         <div class="phase-badge phase-vote" id="player-vote-badge">מי המתחזה?</div>
         <div class="clues-list" id="player-vote-clues"></div>
 
-        <!-- הצבעה (צוות + מתחזים מרובים) -->
+        <!-- סימון חשודים (צוות) / ניחוש שותפים (מתחזה מרובה) -->
         <div id="player-vote-section" style="width:100%;display:flex;flex-direction:column;align-items:center;gap:16px">
           <p class="muted" id="player-vote-prompt">בחרו את מי אתם חושדים:</p>
           <ul class="vote-list" id="player-vote-list"></ul>
+          <button class="btn btn-primary hidden" id="btn-player-vote-confirm">אשר</button>
           <div id="player-voted-msg" class="hidden voted-msg">✅ ההצבעה נקלטה! מחכים לשאר.</div>
         </div>
 
