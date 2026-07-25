@@ -2,7 +2,7 @@
   "relation": ["delegate_permission/common.handle_all_urls"],
   "target": {
     "namespace": "android_app",
-    "package_name": "app.azma.mithaze.twa",
-    "sha256_cert_fingerprints": ["9E:1A:5D:CF:B5:96:C1:AC:2C:B9:B6:F6:97:A1:72:D7:00:2D:23:3E:EC:DF:00:39:A7:13:97:65:07:59:F2:04"]
+    "package_name": "com.mithaze.app",
+    "sha256_cert_fingerprints": ["61:69:BE:2F:31:AC:35:FB:55:81:FF:CF:D5:CB:75:A3:DA:E2:65:29:D4:F9:57:70:72:7E:37:27:5B:81:76:53"]
   }
 }]
