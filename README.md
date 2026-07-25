@@ -17,7 +17,7 @@
 
 האתר ניתן **להתקנה כאפליקציה (PWA)** — כפתור "📲 התקינו את מתחזה" מופיע במסך הבית בדפדפנים תומכים, או דרך "הוסף למסך הבית" בתפריט הדפדפן.
 
-המשחק ארוז גם כ-**TWA (Trusted Web Activity)** לפרסום ב-Google Play (חבילת PWABuilder). קובץ האימות `public/.well-known/assetlinks.json` מקשר בין הדומיין (`mithaze.azma.app`) לחבילת ה-Android (`app.azma.mithaze.twa`) — `server.js` מגיש אותו במפורש כי `express.static` מתעלם מ-dotfiles כברירת מחדל.
+המשחק ארוז גם כ-**TWA (Trusted Web Activity)** לפרסום ב-Google Play (חבילת PWABuilder). קובץ האימות `public/.well-known/assetlinks.json` מקשר בין הדומיין (`mithaze.azma.app`) לחבילת ה-Android (`com.mithaze.app`) — `server.js` מגיש אותו במפורש כי `express.static` מתעלם מ-dotfiles כברירת מחדל.
 5. אחרי שני סבבי רמזים עוברים אוטומטית לשלב ההכרעה:
    - **הצוות מסמן** את המתחזים (מספר הסימונים = מספר המתחזים בסבב). אם תפסו את *כולם* — החבורה מנצחת.
    - **המתחזה מנחש את המילה הסודית** (אפשר לדלג). ניחוש נכון = **+1** נקודה.
