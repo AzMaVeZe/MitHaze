@@ -55,6 +55,7 @@ body {
 .slogan { color: var(--accent-3); font-size: 17px; font-weight: 700; font-style: italic; margin: 2px 0 8px; }
 .tagline { color: var(--muted); font-size: 17px; max-width: 420px; margin: 0 auto; }
 .foot-note { text-align: center; color: var(--muted); font-size: 14px; margin-top: 20px; }
+.privacy-link { color: var(--muted); text-decoration: underline; }
 .install-btn { margin-top: 16px; border-color: var(--accent-3); animation: fade .4s ease; }
 
 /* --- כרטיס --- */
