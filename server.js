@@ -40,6 +40,11 @@ const io = new Server(httpServer);
 
 const PORT = process.env.PORT || 3000;
 
+// express.static מתעלם מ-dotfiles כברירת מחדל (dotfiles:'ignore') — אבל
+// /.well-known/assetlinks.json (אימות Android App Links ל-TWA) חייב להיות מוגש.
+// מגדירים סטטיק ייעודי שמאפשר dotfiles רק תחת /.well-known, בלי לפרוץ את
+// ברירת המחדל הבטוחה לשאר האתר.
+app.use('/.well-known', express.static(join(__dirname, 'public', '.well-known'), { dotfiles: 'allow' }));
 app.use(express.static(join(__dirname, 'public')));
 
 // בריאות — כולל גרסה כדי שאפשר יהיה לוודא איזו מהדורה רצה בפרודקשן
