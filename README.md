@@ -42,6 +42,8 @@
 
 האתר החי מוגש גם תחת **`https://mithaze.azma.app`** (תת-דומיין ייעודי, מוגדר כ-Custom Domain ב-Render עם רשומת CNAME אצל ספק ה-DNS). כל תגי ה-SEO/‏Open Graph, ה-`sitemap.xml` וה-`robots.txt` מצביעים על הכתובת הזו.
 
+> 🔑 רשימת כל השירותים החיצוניים בשימוש (GitHub, Render, GoDaddy, Google Search Console, Google Play Console…) וחשבון המשתמש המשויך לכל אחד נמצאת ב-[`SERVICES.md`](./SERVICES.md).
+
 ## הפעלה מקומית
 
 ```bash
