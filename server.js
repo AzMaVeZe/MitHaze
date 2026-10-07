@@ -32,6 +32,7 @@ import {
   publicState,
   privateRole,
 } from './src/rooms.js';
+import { incrementGamesPlayed, getStats } from './src/stats.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -55,6 +56,15 @@ app.get('/health', (_req, res) => res.json({ ok: true, version: VERSION }));
 app.get('/api/categories', (_req, res) => {
   res.json(CATEGORIES.map((c) => ({ id: c.id, name: c.name, emoji: c.emoji })));
 });
+
+// סטטיסטיקה פנימית (לא מקושרת משום מקום באתר) — כמה סבבים שוחקו בסך הכל.
+// נחשפת רק עם מפתח סודי ב-ADMIN_STATS_KEY; בלי ההגדרה הזו הנתיב לא קיים בכלל.
+if (process.env.ADMIN_STATS_KEY) {
+  app.get('/api/stats', (req, res) => {
+    if (req.query.key !== process.env.ADMIN_STATS_KEY) return res.status(404).end();
+    res.json(getStats());
+  });
+}
 
 // יצירת QR עבור קישור הצטרפות
 app.get('/api/qr', async (req, res) => {
@@ -194,6 +204,7 @@ io.on('connection', (socket) => {
     if (!room || room.hostSocketId !== socket.id) return;
     if (!canStart(room)) return;
     startRound(room);
+    incrementGamesPlayed();
     broadcastRoom(room);
   });
 
