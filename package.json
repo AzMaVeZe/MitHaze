@@ -1,6 +1,6 @@
 {
   "name": "mithaze",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "משחק מתחזה מרובה משתתפים – כולם מצטרפים מהטלפון שלהם דרך קוד, לינק או QR",
   "type": "module",
   "main": "server.js",
@@ -17,11 +17,11 @@
   ],
   "license": "MIT",
   "engines": {
-    "node": ">=18"
+    "node": "22.x"
   },
   "dependencies": {
-    "express": "^4.19.2",
+    "express": "^4.22.3",
     "qrcode": "^1.5.4",
-    "socket.io": "^4.7.5"
+    "socket.io": "^4.8.4"
   }
 }

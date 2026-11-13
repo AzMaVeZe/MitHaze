@@ -1,7 +1,7 @@
 // Service Worker של "מתחזה".
 // אסטרטגיה: רשת-קודם תמיד (כדי שלעולם לא נגיש גרסה ישנה), עם נפילה
 // לקאש רק כשאין רשת. סוקטים ו-API בזמן אמת לא נוגעים בקאש בכלל.
-const CACHE = 'mithaze-v1';
+const CACHE = 'mithaze-v2';
 const PRECACHE = [
   '/',
   '/css/styles.css',
@@ -30,14 +30,19 @@ self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
   if (url.pathname.startsWith('/socket.io') || url.pathname.startsWith('/api/')) return;
 
+  // כל קישור הצטרפות (/?c=XXXX) נשמר תחת "/" — אחרת הקאש גדל עם כל חדר
+  const key = url.pathname === '/' ? '/' : e.request;
   e.respondWith(
     fetch(e.request)
       .then((res) => {
-        // עדכון הקאש ברקע כדי שמצב לא-מקוון יגיש את הגרסה האחרונה שנראתה
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
+        // עדכון הקאש ברקע כדי שמצב לא-מקוון יגיש את הגרסה האחרונה שנראתה.
+        // רק תשובות תקינות — לא שומרים דף שגיאה במקום האפליקציה.
+        if (res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(key, copy)).catch(() => {});
+        }
         return res;
       })
-      .catch(() => caches.match(e.request, { ignoreSearch: url.pathname === '/' }))
+      .catch(() => caches.match(key))
   );
 });

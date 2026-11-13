@@ -10,6 +10,9 @@ on:
     - cron: '*/10 * * * *'
   workflow_dispatch: {}
 
+# הגישה היחידה שנדרשת היא לסוד ה-hook / לכתובת ציבורית — בלי הרשאות למאגר.
+permissions: {}
+
 jobs:
   ping:
     runs-on: ubuntu-latest

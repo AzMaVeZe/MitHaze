@@ -11,6 +11,9 @@ on:
     branches: [main]
   workflow_dispatch: {}
 
+# הגישה היחידה שנדרשת היא לסוד ה-hook / לכתובת ציבורית — בלי הרשאות למאגר.
+permissions: {}
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
