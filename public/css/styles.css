@@ -222,8 +222,9 @@ select.input { appearance: none; background-image: url("data:image/svg+xml,%3Csv
 /* --- כרטיס תפקיד --- */
 .role-card { border-radius: 24px; padding: 36px 24px; width: 100%; max-width: 380px; box-shadow: var(--shadow); border: 2px solid var(--card-border); cursor: pointer; user-select: none; -webkit-user-select: none; transition: transform .15s ease, background .2s, border-color .2s; }
 .role-card:active { transform: scale(.98); }
-.role-card.crew { background: linear-gradient(160deg, #1e5e4a, #0e3a2c); border-color: var(--good); }
-.role-card.imposter { background: linear-gradient(160deg, #6d1e3d, #3a0e22); border-color: var(--accent); }
+/* גם כשהכרטיס חשוף — אותו צבע לצוות ולמתחזה. צבע שונה נראה מעבר לשולחן ומסגיר את המתחזה. */
+.role-card.crew,
+.role-card.imposter { background: linear-gradient(160deg, #2c1f5c, #1b1240); border-color: var(--accent-3); }
 /* מצב מוסתר — נראה זהה לכולם, בלי שום רמז לתפקיד */
 .role-card.facedown { background: linear-gradient(160deg, #35256e, #221647); border-color: var(--accent-2); }
 .role-emoji { font-size: 60px; }

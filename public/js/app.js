@@ -9,8 +9,8 @@
   const S = {
     role: null,        // 'host' | 'player'
     code: null,
-    token: null,       // hostToken (host) / playerId (player)
-    myId: null,        // playerId (player)
+    token: null,       // hostToken (מנחה) / token סודי להתחברות מחדש (שחקן)
+    myId: null,        // playerId — מזהה ציבורי, כולם רואים אותו
     pub: null,         // publicState אחרון
     myRole: null,      // {isImposter, word, categoryName, emoji, teammates}
     roleRevealed: false, // האם כרטיס התפקיד חשוף כרגע (ברירת מחדל: מוסתר)
@@ -57,7 +57,7 @@
 
   function saveSession() {
     try {
-      localStorage.setItem(SESSION_KEY, JSON.stringify({ role: S.role, code: S.code, token: S.token, at: Date.now() }));
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ role: S.role, code: S.code, token: S.token, pid: S.myId, at: Date.now() }));
     } catch (_) {}
   }
 
@@ -75,6 +75,8 @@
     clearSession();
     location.href = '/';
   });
+
+  el('btn-kicked-home').addEventListener('click', () => { location.href = '/'; });
 
   // ---------- צליל ורטט ----------
   function renderSoundBtn() {
@@ -105,8 +107,10 @@
   }
 
   // ---------- תורות ----------
-  el('btn-turn-done').addEventListener('click', () => socket.emit('turn:done'));
-  el('btn-host-next-turn').addEventListener('click', () => socket.emit('turn:done'));
+  // שולחים את מספר התור שראינו — השרת מתעלם מלחיצה כפולה במקום לדלג על שחקן
+  const turnDone = () => socket.emit('turn:done', { turn: S.pub?.round?.turnsDone });
+  el('btn-turn-done').addEventListener('click', turnDone);
+  el('btn-host-next-turn').addEventListener('click', turnDone);
 
   // ---------- רמזים כתובים ----------
   function sendClue(inputId) {
@@ -194,7 +198,7 @@
     if (!name) return toast('הכניסו שם');
     socket.emit('player:join', { code, name }, (res) => {
       if (!res?.ok) return toast(joinError(res?.error));
-      S.role = 'player'; S.code = res.code; S.token = res.playerId; S.myId = res.playerId;
+      S.role = 'player'; S.code = res.code; S.token = res.token; S.myId = res.playerId;
       S.pub = res.state; saveSession();
       showScreen('screen-player');
       renderPlayer();
@@ -206,6 +210,8 @@
       'room-not-found': 'קוד לא נמצא. בדקו שוב.',
       'game-in-progress': 'המשחק כבר התחיל. חכו לסבב הבא.',
       'player-not-found': 'החיבור פג. הצטרפו מחדש.',
+      'room-full': 'החדר מלא (עד 20 שחקנים).',
+      'rate-limited': 'יותר מדי ניסיונות. חכו דקה ונסו שוב.',
     })[code] || 'שגיאה. נסו שוב.';
   }
 
@@ -267,7 +273,7 @@
     if (hostPlays && !hostName) return toast('הכניסו את השם שלכם');
     const payload = { hostPlays, hostName };
     socket.emit('host:create', payload, (res) => {
-      if (!res?.ok) return toast('שגיאה ביצירת חדר');
+      if (!res?.ok) return toast(res?.error === 'rate-limited' ? 'יותר מדי חדרים נפתחו. חכו דקה.' : 'שגיאה ביצירת חדר');
       S.role = 'host'; S.code = res.code; S.token = res.hostToken; S.pub = res.state;
       S.myId = res.hostPlayerId || null;
       saveSession();
@@ -338,8 +344,9 @@
 
     const btn = el('btn-host-start');
     btn.disabled = !p.canStart;
-    const need = Math.max(p.minPlayers, p.settings.imposterCount + 1);
-    el('host-start-hint').textContent = p.canStart ? 'מוכנים!' : `צריך לפחות ${need} שחקנים`;
+    const need = p.needPlayers || p.minPlayers;
+    el('host-start-hint').textContent = p.canStart ? 'מוכנים!'
+      : (p.settings.imposterCount > 1 ? `עם ${p.settings.imposterCount} מתחזים צריך לפחות ${need} שחקנים` : `צריך לפחות ${need} שחקנים`);
   }
 
   let qrCache = null;
@@ -447,20 +454,10 @@
     if (p.hostPlays && S.myId) {
       selfBox.classList.remove('hidden');
       const me = p.players.find((x) => x.id === S.myId);
-      const r = S.myRole;
-      const isImposter = !!r?.isImposter;
-      const k = p.round?.imposterCount || 1;
-      const need = isImposter ? k - 1 : k;
-      el('host-vote-self-list-box').classList.toggle('hidden', need < 1);
-      if (need >= 1) {
-        el('host-vote-prompt').textContent = isImposter
-          ? `מי המתחזים האחרים? סמנו ${need}`
-          : (k === 1 ? 'ההצבעה שלך:' : `סמנו את ${k} המתחזים:`);
-        renderMarkList('host-vote-list', 'btn-host-vote-confirm', need, !!me?.hasVoted);
-        el('host-voted-msg').classList.toggle('hidden', !me?.hasVoted);
-      }
-      el('host-guess-section').classList.toggle('hidden', !isImposter);
-      if (isImposter) renderGuessState('host-guess-section', 'host-guessed-msg', me);
+      renderVoteBox({
+        prompt: 'host-vote-prompt', list: 'host-vote-list', confirm: 'btn-host-vote-confirm',
+        voted: 'host-voted-msg', guess: 'host-guess-section', guessed: 'host-guessed-msg',
+      }, me, renderHostVote);
     } else {
       selfBox.classList.add('hidden');
     }
@@ -478,8 +475,8 @@
     el('host-word').textContent = r.word;
 
     const byId = Object.fromEntries(p.players.map((x) => [x.id, x]));
-    const impNames = r.imposterIds.map((id) => byId[id]?.name || '?').join(', ');
-    el('host-imposter-reveal').innerHTML = `המתחזה${r.imposterIds.length > 1 ? 'ים' : ''}: <span class="imp">${impNames}</span>`;
+    const impNames = r.imposterIds.map((id) => escapeHtml(byId[id]?.name || '?')).join(', ');
+    el('host-imposter-reveal').innerHTML = `${r.imposterIds.length > 1 ? 'המתחזים' : 'המתחזה'}: <span class="imp">${impNames}</span>`;
     el('host-guess-reveal').innerHTML = guessRevealHtml(r, byId);
 
     const tally = el('host-tally');
@@ -489,7 +486,7 @@
     for (const [id, n] of entries) {
       const li = document.createElement('li');
       if (impSet.has(id)) li.classList.add('is-imposter');
-      li.innerHTML = `<span>${avatarFor(id)} ${byId[id]?.name || '?'} ${impSet.has(id) ? '🕵️' : ''}</span><span class="count">${n} קולות</span>`;
+      li.innerHTML = `<span>${avatarFor(id)} ${escapeHtml(byId[id]?.name || '?')} ${impSet.has(id) ? '🕵️' : ''}</span><span class="count">${n} קולות</span>`;
       tally.appendChild(li);
     }
     if (entries.length === 0) tally.innerHTML = '<li>לא היו הצבעות</li>';
@@ -566,7 +563,7 @@
       ${pl.score ? `<span class="score">${pl.score} נק'</span>` : ''}
       ${finished ? '<span class="badge-voted">✓</span>' : ''}
     `;
-    if (kickable) {
+    if (kickable && !isHost) {
       const k = document.createElement('button');
       k.className = 'kick'; k.textContent = '✕'; k.title = 'הסר';
       k.addEventListener('click', () => socket.emit('host:kick', { playerId: pl.id }));
@@ -680,30 +677,36 @@
   function renderPlayerVote() {
     renderClues('player-vote-clues');
     const me = S.pub.players.find((x) => x.id === S.myId);
-    const r = S.myRole;
-    const isImposter = !!r?.isImposter;
     const k = S.pub.round?.imposterCount || 1;
-    const need = isImposter ? k - 1 : k; // מתחזה מנחש שותפים; צוות מסמן את כל המתחזים
-    const showMarks = need >= 1;
-    const showGuess = isImposter;
+    el('player-vote-badge').textContent = k > 1 ? 'מי המתחזים?' : 'מי המתחזה?';
+    renderVoteBox({
+      prompt: 'player-vote-prompt', list: 'player-vote-list', confirm: 'btn-player-vote-confirm',
+      voted: 'player-voted-msg', guess: 'player-guess-section', guessed: 'player-guessed-msg',
+    }, me, renderPlayerVote);
+  }
 
-    el('player-vote-badge').textContent = isImposter ? '🕵️ תורך לנחש' : 'מי המתחזה?';
-
-    el('player-vote-section').classList.toggle('hidden', !showMarks);
-    if (showMarks) {
-      el('player-vote-prompt').textContent = isImposter
-        ? `מי המתחזים האחרים? סמנו ${need}`
-        : (k === 1 ? 'בחרו את מי אתם חושדים:' : `סמנו את ${k} המתחזים:`);
-      renderMarkList('player-vote-list', 'btn-player-vote-confirm', need, !!me?.hasVoted);
-      el('player-voted-msg').classList.toggle('hidden', !me?.hasVoted);
-    }
-
-    el('player-guess-section').classList.toggle('hidden', !showGuess);
-    if (showGuess) renderGuessState('player-guess-section', 'player-guessed-msg', me);
+  // מסך ההכרעה של משתתף (שחקן או מנחה-משתתף). צוות מסמן את כל המתחזים; מתחזה
+  // מרובה מנחש את שותפיו ואז את המילה. מתחזה יחיד מקבל קודם רשימת חשודים זהה
+  // לזו של הצוות (הבחירה בה לא נספרת) ורק אחר כך את תיבת הניחוש — כדי שמבט
+  // מהצד במסך שלו לא יסגיר אותו.
+  function renderVoteBox(ids, me, rerender) {
+    const isImposter = !!S.myRole?.isImposter;
+    const k = S.pub.round?.imposterCount || 1;
+    const need = isImposter ? k - 1 : k;
+    const decoy = isImposter && need === 0;
+    const marked = decoy ? !!S.decoyDone : !!me?.hasVoted;
+    el(ids.prompt).textContent = (isImposter && !decoy)
+      ? `מי המתחזים האחרים? סמנו ${need}`
+      : (k === 1 ? 'בחרו את מי אתם חושדים:' : `סמנו את ${k} המתחזים:`);
+    renderMarkList(ids.list, ids.confirm, decoy ? 1 : need, marked, decoy ? rerender : null);
+    el(ids.voted).classList.toggle('hidden', !marked || isImposter);
+    el(ids.guess).classList.toggle('hidden', !(isImposter && marked));
+    if (isImposter && marked) renderGuessState(ids.guess, ids.guessed, me);
   }
 
   // רשימת סימון (ללא עצמך/מצטרפים מאוחרים). need=1 → הקשה מיידית; need≥2 → סימון + אישור.
-  function renderMarkList(listId, confirmBtnId, need, locked) {
+  // onDecoy — מצב הטעיה של מתחזה יחיד: הבחירה נשמרת רק מקומית ולא נשלחת לשרת.
+  function renderMarkList(listId, confirmBtnId, need, locked, onDecoy) {
     const list = el(listId);
     list.innerHTML = '';
     for (const pl of S.pub.players) {
@@ -714,6 +717,7 @@
       b.disabled = locked;
       b.addEventListener('click', () => {
         if (locked) return;
+        if (onDecoy) { S.selectedMarks = new Set([pl.id]); S.decoyDone = true; SFX.play('tap'); onDecoy(); return; }
         if (need === 1) { S.selectedMarks = new Set([pl.id]); socket.emit('player:vote', { targets: [pl.id] }); return; }
         if (S.selectedMarks.has(pl.id)) S.selectedMarks.delete(pl.id);
         else if (S.selectedMarks.size < need) S.selectedMarks.add(pl.id);
@@ -745,8 +749,8 @@
     }
     el('player-word').textContent = r.word;
     const byId = Object.fromEntries(S.pub.players.map((x) => [x.id, x]));
-    const impNames = r.imposterIds.map((id) => byId[id]?.name || '?').join(', ');
-    el('player-imposter-reveal').innerHTML = `המתחזה${r.imposterIds.length > 1 ? 'ים' : ''}: <span class="imp">${impNames}</span>` +
+    const impNames = r.imposterIds.map((id) => escapeHtml(byId[id]?.name || '?')).join(', ');
+    el('player-imposter-reveal').innerHTML = `${r.imposterIds.length > 1 ? 'המתחזים' : 'המתחזה'}: <span class="imp">${impNames}</span>` +
       (amImposter ? ' <b>(זה אתה!)</b>' : '');
     el('player-guess-reveal').innerHTML = guessRevealHtml(r, byId);
     const d = r.deltas?.[S.myId] || 0;
@@ -816,6 +820,7 @@
       S.myGuessNote = null;
       S.selectedVote = null;
       S.selectedMarks = new Set();
+      S.decoyDone = false;
     }
     touchSession();
     handleFx(prev, state);
@@ -837,9 +842,19 @@
   });
 
   socket.on('player:kicked', () => {
+    if (S.role === 'host') return;
     clearSession();
+    S.role = null; S.code = null; S.token = null; S.myId = null; // כדי ש-room:state לא ידרוס את מסך ההסרה
     showSub('screen-player', { 'player-wait': false, 'player-role': false, 'player-vote': false, 'player-results': false, 'player-kicked': true });
     showScreen('screen-player');
+  });
+
+  // המשחק נפתח בטאב/מכשיר אחר — הטאב הזה כבר לא שולט בשחקן.
+  // לא מוחקים את ה-session השמור: הוא שייך עכשיו לטאב החדש באותו דפדפן.
+  socket.on('session:replaced', () => {
+    S.role = null; S.code = null; S.token = null; S.myId = null; S.pub = null;
+    showScreen('screen-home');
+    toast('המשחק נפתח בחלון אחר');
   });
 
   // חיבור חוזר אחרי נפילת רשת (באותו עמוד) — משחזרים את המשחק שהיינו בו.
@@ -853,7 +868,7 @@
 
   // ---------- התחברות מחדש ----------
   function resendReconnect() {
-    doReconnect({ role: S.role, code: S.code, token: S.token });
+    doReconnect({ role: S.role, code: S.code, token: S.token, pid: S.myId });
   }
 
   function readSession() {
@@ -882,9 +897,9 @@
         showScreen('screen-host'); renderHost();
       });
     } else if (sess.role === 'player') {
-      socket.emit('player:reconnect', { code: sess.code, playerId: sess.token }, (res) => {
+      socket.emit('player:reconnect', { code: sess.code, playerId: sess.pid, token: sess.token }, (res) => {
         if (!res?.ok) { sessionDead(); return; }
-        S.role = 'player'; S.code = res.code; S.token = res.playerId; S.myId = res.playerId; S.pub = res.state;
+        S.role = 'player'; S.code = res.code; S.token = sess.token; S.myId = res.playerId; S.pub = res.state;
         showScreen('screen-player'); renderPlayer();
       });
     }

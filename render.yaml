@@ -5,7 +5,7 @@ services:
     name: mithaze
     runtime: node
     plan: free
-    buildCommand: npm install
+    buildCommand: npm ci
     startCommand: npm start
     envVars:
       - key: NODE_VERSION

@@ -1,12 +1,28 @@
 // ניהול חדרים ולוגיקת המשחק "מתחזה".
 // כל חדר מזוהה בקוד קצר. לשחקנים יש מזהה קבוע (playerId) כדי לאפשר התחברות מחדש.
 
-import { pickWord } from '../data/words.js';
+import { randomUUID, randomInt } from 'crypto';
+import { pickWord, CATEGORIES } from '../data/words.js';
 
 const rooms = new Map();
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // ללא תווים מבלבלים (O/0, I/1)
 const MIN_PLAYERS = 3;
+const MAX_PLAYERS = 20;
+const MAX_ROOMS = 2000;
+const CATEGORY_IDS = new Set(['all', ...CATEGORIES.map((c) => c.id)]);
+
+// כל קלט מהרשת עלול להיות אובייקט/מערך במקום מחרוזת — String() על אובייקט
+// עם toString לא-פונקציה זורק ומפיל את התהליך. לכן מקבלים רק מחרוזות.
+export function str(v, max) {
+  return typeof v === 'string' ? v.trim().slice(0, max) : '';
+}
+
+// כמה שחקנים צריך כדי שהמשחק יהיה הוגן: לפחות 2 צוות לכל מתחזה ועוד אחד
+// (עם 4 שחקנים ו-3 מתחזים, הצוות היחיד מסמן "את כל השאר" ומנצח תמיד).
+export function playersNeeded(imposterCount) {
+  return Math.max(MIN_PLAYERS, imposterCount * 2 + 1);
+}
 
 const AVATARS = ['🦊', '🐼', '🦁', '🐸', '🦉', '🐙', '🦄', '🐝', '🐨', '🦖', '🐧', '🦋', '🐬', '🦔', '🐢', '🦩', '🐰', '🐷', '🐵', '🦇'];
 
@@ -30,36 +46,31 @@ function shuffle(arr) {
 }
 
 function genCode() {
-  let code;
-  do {
-    code = '';
-    for (let i = 0; i < 4; i++) {
-      code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
-    }
-  } while (rooms.has(code));
-  return code;
+  for (let attempt = 0; attempt < 50; attempt++) {
+    let code = '';
+    for (let i = 0; i < 4; i++) code += CODE_CHARS[randomInt(CODE_CHARS.length)];
+    if (!rooms.has(code)) return code;
+  }
+  return null;
 }
 
-function genId() {
-  return (
-    Math.random().toString(36).slice(2, 10) +
-    Math.random().toString(36).slice(2, 10)
-  );
-}
-
+// מחזיר null כשהשרת מלא — המתקשר מדווח שגיאה במקום לתקוע את השרת.
 export function createRoom(settings = {}) {
+  if (rooms.size >= MAX_ROOMS) return null;
   const code = genCode();
+  if (!code) return null;
   const room = {
     code,
     createdAt: Date.now(),
-    hostToken: genId(),
+    lastActivity: Date.now(),
+    hostToken: randomUUID(),
     hostSocketId: null,
     hostPlays: false,     // האם המנחה משתתף גם כשחקן (מהטלפון שלו)
     hostPlayerId: null,   // מזהה השחקן של המנחה, אם הוא משתתף
     phase: 'lobby', // lobby | reveal | vote | results
     settings: {
       imposterCount: clampInt(settings.imposterCount, 1, 3, 1),
-      categoryId: settings.categoryId || 'all',
+      categoryId: validCategory(settings.categoryId) || 'all',
       imposterSeesCategory: settings.imposterSeesCategory !== false,
       typedClues: settings.typedClues !== false, // רמזים כתובים שכולם רואים (אופציונלי)
     },
@@ -73,21 +84,37 @@ export function createRoom(settings = {}) {
 }
 
 export function getRoom(code) {
-  if (!code) return null;
-  return rooms.get(String(code).toUpperCase()) || null;
+  const c = str(code, 8);
+  if (!c) return null;
+  return rooms.get(c.toUpperCase()) || null;
 }
 
-function clampInt(v, min, max, dflt) {
+export function clampInt(v, min, max, dflt) {
+  if (typeof v !== 'number' && typeof v !== 'string') return dflt;
   const n = parseInt(v, 10);
   if (Number.isNaN(n)) return dflt;
   return Math.max(min, Math.min(max, n));
 }
 
+export function validCategory(id) {
+  return typeof id === 'string' && CATEGORY_IDS.has(id) ? id : null;
+}
+
+// תווי בקרה ותווי כיווניות (RLO וכו') בשם מאפשרים לשבש את התצוגה אצל אחרים.
+function cleanName(name) {
+  return str(name, 40).replace(/[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g, '').trim().slice(0, 20);
+}
+
+// מחזיר null כשהחדר מלא.
+// token הוא הסוד להתחברות מחדש — נשלח רק לשחקן עצמו ולעולם לא משודר,
+// בניגוד ל-id שמופיע במצב הציבורי שכולם רואים.
 export function addPlayer(room, name, socketId) {
-  const playerId = genId();
+  if (room.players.size >= MAX_PLAYERS) return null;
+  const playerId = randomUUID();
   const player = {
     id: playerId,
-    name: String(name || '').trim().slice(0, 20) || 'שחקן',
+    token: randomUUID(),
+    name: cleanName(name) || 'שחקן',
     avatar: pickAvatar(room),
     socketId,
     connected: true,
@@ -101,28 +128,32 @@ export function addPlayer(room, name, socketId) {
   return player;
 }
 
-export function reconnectPlayer(room, playerId, socketId) {
+// השחקן של המנחה כבר אומת דרך hostToken — רק קוד השרת יכול להעביר את הסימן הזה,
+// כך שבקשה מהרשת בלי token לא עוקפת את הבדיקה.
+export const HOST_VERIFIED = Symbol('host-verified');
+
+export function reconnectPlayer(room, playerId, socketId, token) {
   const player = room.players.get(playerId);
   if (!player) return null;
+  if (token !== HOST_VERIFIED && (typeof token !== 'string' || token !== player.token)) return null;
   player.socketId = socketId;
   player.connected = true;
   return player;
 }
 
-export function markDisconnected(socketId) {
-  for (const room of rooms.values()) {
-    if (room.hostSocketId === socketId) {
-      room.hostSocketId = null;
-    }
-    for (const p of room.players.values()) {
-      if (p.socketId === socketId) {
-        p.connected = false;
-        p.socketId = null;
-        return { room, player: p };
-      }
+// סוקט שייך לחדר אחד לכל היותר (leaveOtherRooms) — מחפשים רק בו, בלי לסרוק את כל החדרים.
+export function markDisconnected(socketId, code) {
+  const room = getRoom(code);
+  if (!room) return null;
+  if (room.hostSocketId === socketId) room.hostSocketId = null;
+  for (const p of room.players.values()) {
+    if (p.socketId === socketId) {
+      p.connected = false;
+      p.socketId = null;
+      return { room, player: p };
     }
   }
-  return null;
+  return { room, player: null };
 }
 
 export function connectedPlayers(room) {
@@ -130,8 +161,7 @@ export function connectedPlayers(room) {
 }
 
 export function canStart(room) {
-  const active = connectedPlayers(room);
-  return active.length >= MIN_PLAYERS && active.length > room.settings.imposterCount;
+  return room.phase === 'lobby' && connectedPlayers(room).length >= playersNeeded(room.settings.imposterCount);
 }
 
 // מתחיל סבב חדש: בוחר מילה, מגריל מתחזים ומאפס הצבעות.
@@ -141,7 +171,7 @@ export function startRound(room) {
 
   // הגרלת מתחזים (ערבוב הוגן)
   const shuffled = shuffle(active);
-  const imposterCount = Math.min(room.settings.imposterCount, active.length - 1);
+  const imposterCount = Math.max(1, Math.min(room.settings.imposterCount, Math.floor((active.length - 1) / 2)));
   const imposterIds = new Set(shuffled.slice(0, imposterCount).map((p) => p.id));
 
   for (const p of room.players.values()) {
@@ -200,7 +230,7 @@ export function addClue(room, playerId, text) {
   if (!room.settings.typedClues) return false;
   const currentTurnId = room.round.order[room.round.turnIndex];
   if (playerId !== currentTurnId) return false;
-  const clue = String(text || '').trim().slice(0, 24);
+  const clue = str(text, 24);
   if (!clue) return false;
   room.round.clues.push({ playerId, text: clue });
   completeTurn(room);
@@ -263,7 +293,7 @@ export function submitGuess(room, playerId, text) {
   const player = room.players.get(playerId);
   if (!player || !player.connected) return false;
   if (!player.isImposter || !room.round.order.includes(playerId)) return false;
-  const raw = text == null ? null : String(text).trim().slice(0, 30);
+  const raw = str(text, 30);
   player.guess = raw || null;
   player.guessed = true;
   player.guessCorrect = !!raw && normalizeWord(raw) === normalizeWord(room.round.word);
@@ -404,12 +434,20 @@ export function deleteRoom(code) {
   rooms.delete(code);
 }
 
-// ניקוי חדרים ישנים (מעל 6 שעות) כדי לא לצבור זיכרון.
+export function touchRoom(room) {
+  room.lastActivity = Date.now();
+}
+
+// ניקוי לפי זמן הפעילות האחרונה (לא לפי זמן היצירה — כדי לא למחוק ערב משחק
+// ארוך באמצע). חדר בלי אף אחד מחובר נמחק מהר יותר.
 export function cleanupRooms() {
   const now = Date.now();
-  const SIX_HOURS = 6 * 60 * 60 * 1000;
+  const IDLE = 6 * 60 * 60 * 1000;
+  const EMPTY_IDLE = 30 * 60 * 1000;
   for (const [code, room] of rooms.entries()) {
-    if (now - room.createdAt > SIX_HOURS) rooms.delete(code);
+    const idle = now - room.lastActivity;
+    const empty = !room.hostSocketId && connectedPlayers(room).length === 0;
+    if (idle > IDLE || (empty && idle > EMPTY_IDLE)) rooms.delete(code);
   }
 }
 
@@ -433,6 +471,7 @@ export function publicState(room) {
     settings: room.settings,
     players,
     minPlayers: MIN_PLAYERS,
+    needPlayers: playersNeeded(room.settings.imposterCount),
     canStart: canStart(room),
     hostPlays: room.hostPlays,
     hostPlayerId: room.hostPlayerId,
@@ -440,12 +479,15 @@ export function publicState(room) {
     history: room.history,
   };
   if (room.round) {
+    // לכל קטגוריה יש אימוג'י משלה — הוא חושף את הקטגוריה בדיוק כמו השם
+    const catVisible = room.settings.imposterSeesCategory;
     state.round = {
-      categoryName: room.settings.imposterSeesCategory ? room.round.categoryName : null,
-      emoji: room.round.emoji,
+      categoryName: catVisible ? room.round.categoryName : null,
+      emoji: catVisible ? room.round.emoji : null,
       order: room.round.order,
       startingPlayerId: room.round.startingPlayerId,
       turnIndex: room.round.turnIndex,
+      turnsDone: room.round.turnsDone,
       currentTurnId: room.round.order[room.round.turnIndex] || null,
       clues: room.round.clues,
       clueCycle: Math.min(CLUE_CYCLES, Math.floor(room.round.turnsDone / room.round.order.length) + 1),
@@ -472,7 +514,7 @@ export function privateRole(room, playerId) {
       isImposter: true,
       word: null,
       categoryName: room.settings.imposterSeesCategory ? room.round.categoryName : null,
-      emoji: room.round.emoji,
+      emoji: room.settings.imposterSeesCategory ? room.round.emoji : null,
     };
   }
   return {
