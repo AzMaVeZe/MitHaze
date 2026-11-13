@@ -53,6 +53,22 @@
     // כפתור יציאה מוצג רק בתוך משחק
     el('btn-exit').classList.toggle('hidden', id === 'screen-home' || id === 'screen-create');
     window.scrollTo(0, 0);
+    focusScreen(id);
+  }
+
+  // פוקוס לכותרת הגלויה הראשונה במסך — קורא מסך מקריא אותה, ופוקוס לא נשאר על כפתור שנעלם
+  function focusScreen(id) {
+    const scr = el(id);
+    const target = [...scr.querySelectorAll('h1, h2, h3')].find((x) => x.offsetParent !== null) || scr;
+    if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1');
+    target.focus({ preventScroll: true });
+  }
+
+  // הודעה לקוראי מסך (אזור aria-live מוסתר). מנקים קודם כדי שאותה הודעה תוקרא שוב.
+  function announce(msg) {
+    const n = el('sr-status');
+    n.textContent = '';
+    setTimeout(() => { n.textContent = msg; }, 60);
   }
 
   function saveSession() {
@@ -83,6 +99,7 @@
     const b = el('btn-sound');
     b.textContent = SFX.enabled ? '🔊' : '🔇';
     b.classList.toggle('muted', !SFX.enabled);
+    b.setAttribute('aria-pressed', String(!!SFX.enabled));
   }
   el('btn-sound').addEventListener('click', () => {
     SFX.toggle();
@@ -261,8 +278,11 @@
     const sel = el('host-set-category');
     if (sel.options.length <= 1) fillCategorySelect(sel).then(() => { sel.value = s.categoryId || 'all'; });
     else sel.value = s.categoryId || 'all';
-    $$('#host-set-imposters button').forEach((x) =>
-      x.classList.toggle('active', parseInt(x.dataset.val, 10) === s.imposterCount));
+    $$('#host-set-imposters button').forEach((x) => {
+      const on = parseInt(x.dataset.val, 10) === s.imposterCount;
+      x.classList.toggle('active', on);
+      x.setAttribute('aria-pressed', String(on));
+    });
     el('host-set-seescat').checked = s.imposterSeesCategory !== false;
     el('host-set-typedclues').checked = s.typedClues !== false;
   }
@@ -501,13 +521,13 @@
     return r.guesses.map((g) => {
       const name = escapeHtml(byId[g.id]?.name || '?');
       let word;
-      if (g.correct) word = `🎯 ${name} ניחש את המילה נכון: <span class="g-ok">${escapeHtml(g.guess)}</span> (+1)`;
+      if (g.correct) word = `🎯 ${name} ניחש את המילה נכון: <span class="g-ok">${escapeHtml(g.guess)}</span> (&lrm;+1)`;
       else if (g.guess) word = `❌ ${name} ניחש: <span class="g-bad">${escapeHtml(g.guess)}</span> — לא נכון`;
       else word = `🙈 ${name} דילג על ניחוש המילה`;
       if (!multi) return word;
       const marked = (g.partnerMarks || []).map((id) => escapeHtml(byId[id]?.name || '?')).join(', ');
       const partner = g.partnerCorrect > 0
-        ? ` · 🤝 <span class="g-ok">זיהה שותף נכון (+${g.partnerCorrect})</span>`
+        ? ` · 🤝 <span class="g-ok">זיהה שותף נכון (&lrm;+${g.partnerCorrect})</span>`
         : ` · 🤷 לא זיהה שותף${marked ? ` (סימן: ${marked})` : ''}`;
       return word + partner;
     }).join('<br>');
@@ -566,7 +586,10 @@
     if (kickable && !isHost) {
       const k = document.createElement('button');
       k.className = 'kick'; k.textContent = '✕'; k.title = 'הסר';
-      k.addEventListener('click', () => socket.emit('host:kick', { playerId: pl.id }));
+      k.setAttribute('aria-label', `הסרת ${pl.name} מהמשחק`);
+      k.addEventListener('click', () => {
+        if (confirm(`להסיר את ${pl.name} מהמשחק?`)) socket.emit('host:kick', { playerId: pl.id });
+      });
       li.appendChild(k);
     }
     return li;
@@ -714,6 +737,7 @@
       const b = document.createElement('button');
       b.innerHTML = `<span>${avatarFor(pl.id)}</span><span>${escapeHtml(pl.name)}</span>`;
       if (S.selectedMarks.has(pl.id)) b.classList.add('selected');
+      b.setAttribute('aria-pressed', String(S.selectedMarks.has(pl.id)));
       b.disabled = locked;
       b.addEventListener('click', () => {
         if (locked) return;
@@ -754,7 +778,7 @@
       (amImposter ? ' <b>(זה אתה!)</b>' : '');
     el('player-guess-reveal').innerHTML = guessRevealHtml(r, byId);
     const d = r.deltas?.[S.myId] || 0;
-    el('player-my-score').textContent = me ? `הניקוד שלך: ${me.score}${d ? ` (+${d} בסבב הזה)` : ''}` : '';
+    el('player-my-score').textContent = me ? `הניקוד שלך: ${me.score}${d ? ` (\u200E+${d} בסבב הזה)` : ''}` : '';
     renderScoreboard('player-scoreboard', 'player-rounds');
   }
 
@@ -774,6 +798,14 @@
     if (!S.role) return;
     const prevPhase = prev?.phase;
 
+    if (prevPhase && prevPhase !== cur.phase) {
+      announce(({
+        reveal: 'סבב חדש התחיל. כל אחד קיבל תפקיד.',
+        vote: 'שלב ההצבעה: מי המתחזה?',
+        results: 'התוצאות מוכנות.',
+        lobby: 'חזרה ללובי.',
+      })[cur.phase] || '');
+    }
     if (prevPhase !== cur.phase) {
       if (cur.phase === 'vote') {
         SFX.play('vote');

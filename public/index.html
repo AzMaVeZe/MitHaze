@@ -2,7 +2,7 @@
 <html lang="he" dir="rtl">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#1a1333" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="apple-touch-icon" href="/icons/icon-192.png" />
@@ -37,9 +37,52 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="stylesheet" href="/css/styles.css" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎭</text></svg>" />
+
+  <!-- נתונים מובנים לגוגל ולמנועי AI. התשובות כאן חייבות להתאים לטקסט הגלוי
+       בקטע "שאלות נפוצות" בדף הבית — לעדכן את שניהם יחד. -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebApplication",
+        "name": "מתחזה",
+        "alternateName": "Imposter",
+        "url": "https://mithaze.azma.app/",
+        "description": "משחק מסיבה בעברית: כולם מצטרפים מהטלפון שלהם דרך קוד, לינק או QR, ומנסים לגלות מי המתחזה שלא יודע את המילה הסודית.",
+        "applicationCategory": "GameApplication",
+        "genre": "Party game",
+        "operatingSystem": "Any",
+        "inLanguage": "he",
+        "isAccessibleForFree": true,
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "ILS" }
+      },
+      {
+        "@type": "FAQPage",
+        "inLanguage": "he",
+        "mainEntity": [
+          { "@type": "Question", "name": "כמה שחקנים צריך כדי לשחק מתחזה?",
+            "acceptedAnswer": { "@type": "Answer", "text": "לפחות 3 שחקנים ועד 20 בחדר. עם 2 מתחזים צריך לפחות 5 שחקנים, ועם 3 מתחזים לפחות 7." } },
+          { "@type": "Question", "name": "צריך להוריד אפליקציה?",
+            "acceptedAnswer": { "@type": "Answer", "text": "לא. משחקים מהדפדפן בכל טלפון. אפשר גם להתקין את מתחזה כאפליקציה מ-Google Play או ישירות מהאתר." } },
+          { "@type": "Question", "name": "המשחק בחינם?",
+            "acceptedAnswer": { "@type": "Answer", "text": "כן. בלי פרסומות, בלי הרשמה ובלי איסוף פרטים אישיים." } },
+          { "@type": "Question", "name": "מה עושה המתחזה?",
+            "acceptedAnswer": { "@type": "Answer", "text": "המתחזה לא יודע את המילה הסודית (לפעמים הוא יודע רק את הקטגוריה). הוא מקשיב לרמזים של האחרים ומנסה להשתלב בלי להיחשף. בסוף הסבב הוא מנסה לנחש את המילה." } },
+          { "@type": "Question", "name": "איך מחשבים ניקוד?",
+            "acceptedAnswer": { "@type": "Answer", "text": "שחקן בחבורה מקבל נקודה על כל מתחזה שסימן נכון. מתחזה שלא נתפס מקבל 2 נקודות, וניחוש נכון של המילה מוסיף לו נקודה. כשיש כמה מתחזים, מתחזה שמזהה את שותפו מקבל עוד נקודה." } },
+          { "@type": "Question", "name": "אילו קטגוריות יש במשחק?",
+            "acceptedAnswer": { "@type": "Answer", "text": "13 קטגוריות ו-439 מילים: חיות, אוכל, מקומות, מקצועות, ספורט, חפצים, סרטים ודמויות, חגים ומסורת, יהדות, ישראל, מדינות, זמרים ולהקות ובית המקדש. אפשר גם לשחק בכל הקטגוריות מעורבבות." } },
+          { "@type": "Question", "name": "אפשר לשחק בכיתה או בפעולה?",
+            "acceptedAnswer": { "@type": "Answer", "text": "כן. המנחה פותח משחק במחשב שמחובר למקרן ובוחר \"אני מנחה בלבד\". הקוד וה-QR מוצגים על המסך הגדול, וכל אחד מצטרף מהטלפון שלו." } }
+        ]
+      }
+    ]
+  }
+  </script>
 </head>
 <body>
-  <div id="app">
+  <main id="app">
 
     <!-- מסך בית -->
     <section class="screen active" id="screen-home">
@@ -63,21 +106,69 @@
         </button>
         <div class="divider"><span>או</span></div>
         <form id="form-join" class="stack" autocomplete="off">
-          <input class="input input-code" id="join-code" placeholder="קוד משחק" maxlength="4" inputmode="text" />
-          <input class="input" id="join-name" placeholder="השם שלך" maxlength="20" />
+          <input class="input input-code" id="join-code" placeholder="קוד משחק" aria-label="קוד משחק" maxlength="4" inputmode="text" dir="ltr" autocapitalize="characters" autocorrect="off" spellcheck="false" />
+          <input class="input" id="join-name" placeholder="השם שלך" aria-label="השם שלך" maxlength="20" />
           <button class="btn btn-secondary btn-lg" type="submit">🚪 הצטרף למשחק</button>
         </form>
       </div>
       <button class="btn btn-secondary install-btn hidden" id="btn-install">📲 התקינו את מתחזה כאפליקציה</button>
+
+      <section class="card info-card" aria-labelledby="how-title">
+        <h2 id="how-title">איך משחקים מתחזה?</h2>
+        <ol class="how-steps">
+          <li><b>המנחה פותח משחק</b> — בטלפון, או במחשב ובטלוויזיה כמסך משותף.</li>
+          <li><b>כולם מצטרפים מהטלפון שלהם</b> — סורקים QR, לוחצים על לינק או מקלידים קוד. אין צורך להעביר מכשיר.</li>
+          <li><b>כל אחד מקבל בסוד את המילה</b> — חוץ מהמתחזה, שלא יודע אותה.</li>
+          <li><b>בתורות, כל אחד אומר מילה אחת</b> שקשורה למילה הסודית. אחרי שני סבבים מצביעים: מי המתחזה? והמתחזה מנסה לנחש את המילה.</li>
+        </ol>
+
+        <!-- התשובות כאן ובנתונים המובנים (application/ld+json) ב-head חייבות להתאים -->
+        <h2 class="faq-title">שאלות נפוצות</h2>
+        <div class="faq">
+          <details>
+            <summary>כמה שחקנים צריך כדי לשחק מתחזה?</summary>
+            <p>לפחות 3 שחקנים ועד 20 בחדר. עם 2 מתחזים צריך לפחות 5 שחקנים, ועם 3 מתחזים לפחות 7.</p>
+          </details>
+          <details>
+            <summary>צריך להוריד אפליקציה?</summary>
+            <p>לא. משחקים מהדפדפן בכל טלפון. אפשר גם להתקין את מתחזה כאפליקציה מ-Google Play או ישירות מהאתר.</p>
+          </details>
+          <details>
+            <summary>המשחק בחינם?</summary>
+            <p>כן. בלי פרסומות, בלי הרשמה ובלי איסוף פרטים אישיים.</p>
+          </details>
+          <details>
+            <summary>מה עושה המתחזה?</summary>
+            <p>המתחזה לא יודע את המילה הסודית (לפעמים הוא יודע רק את הקטגוריה). הוא מקשיב לרמזים של האחרים ומנסה להשתלב בלי להיחשף. בסוף הסבב הוא מנסה לנחש את המילה.</p>
+          </details>
+          <details>
+            <summary>איך מחשבים ניקוד?</summary>
+            <p>שחקן בחבורה מקבל נקודה על כל מתחזה שסימן נכון. מתחזה שלא נתפס מקבל 2 נקודות, וניחוש נכון של המילה מוסיף לו נקודה. כשיש כמה מתחזים, מתחזה שמזהה את שותפו מקבל עוד נקודה.</p>
+          </details>
+          <details>
+            <summary>אילו קטגוריות יש במשחק?</summary>
+            <p>13 קטגוריות ו-439 מילים: חיות, אוכל, מקומות, מקצועות, ספורט, חפצים, סרטים ודמויות, חגים ומסורת, יהדות, ישראל, מדינות, זמרים ולהקות ובית המקדש. אפשר גם לשחק בכל הקטגוריות מעורבבות.</p>
+          </details>
+          <details>
+            <summary>אפשר לשחק בכיתה או בפעולה?</summary>
+            <p>כן. המנחה פותח משחק במחשב שמחובר למקרן ובוחר "אני מנחה בלבד". הקוד וה-QR מוצגים על המסך הגדול, וכל אחד מצטרף מהטלפון שלו.</p>
+          </details>
+        </div>
+      </section>
+
       <p class="foot-note">בונים חבורה, מגלים מי המתחזה שלא יודע את המילה הסודית.</p>
-      <p class="foot-note"><a href="/privacy.html" class="privacy-link">מדיניות פרטיות</a></p>
+      <p class="foot-note">
+        <a href="/privacy.html" class="privacy-link">מדיניות פרטיות</a>
+        <span aria-hidden="true"> · </span>
+        <a href="/accessibility.html" class="privacy-link">הצהרת נגישות</a>
+      </p>
     </section>
 
     <!-- מסך יצירת משחק -->
     <section class="screen" id="screen-create">
       <div class="card stack">
         <h2>משחק חדש</h2>
-        <input class="input" id="set-hostname" placeholder="השם שלך במשחק" maxlength="20" />
+        <input class="input" id="set-hostname" placeholder="השם שלך במשחק" aria-label="השם שלך במשחק" maxlength="20" />
         <label class="switch-row">
           <span>אני מנחה בלבד, לא משתתף 🎬</span>
           <input type="checkbox" id="set-hostonly" />
@@ -160,9 +251,9 @@
         <p class="muted">כל אחד רואה במכשיר שלו אם הוא יודע את המילה הסודית — או שהוא <b>המתחזה</b>.</p>
 
         <div class="turn-banner hidden" id="host-turn-banner">
-          <div class="turn-banner-text" id="host-turn-text">🎙️ תורך! אמרו מילה אחת</div>
+          <div class="turn-banner-text" id="host-turn-text" aria-live="polite">🎙️ תורך! אמרו מילה אחת</div>
           <div class="clue-input-row hidden" id="host-clue-row">
-            <input class="input clue-input" id="host-clue-input" placeholder="מה אמרת? (יוצג לכולם)" maxlength="24" autocomplete="off" />
+            <input class="input clue-input" id="host-clue-input" placeholder="מה אמרת? (יוצג לכולם)" aria-label="המילה שאמרת" maxlength="24" autocomplete="off" />
             <button class="btn btn-primary" id="btn-host-clue-send">שלח</button>
           </div>
         </div>
@@ -201,14 +292,14 @@
         <div class="hidden" id="host-vote-self" style="width:100%">
           <div id="host-vote-self-list-box">
             <p class="muted" id="host-vote-prompt">ההצבעה שלך:</p>
-            <ul class="vote-list" id="host-vote-list"></ul>
+            <div class="vote-list" id="host-vote-list" role="group" aria-labelledby="host-vote-prompt"></div>
             <button class="btn btn-primary hidden" id="btn-host-vote-confirm">אשר</button>
             <div id="host-voted-msg" class="hidden voted-msg">✅ הצבעת! אפשר לחשוף כשכולם סיימו.</div>
           </div>
           <div id="host-guess-section" class="guess-section hidden">
             <p class="muted">🕵️ אתה המתחזה — נחש את המילה הסודית:</p>
             <div class="clue-input-row">
-              <input class="input clue-input" id="host-guess-input" placeholder="הניחוש שלך…" maxlength="30" autocomplete="off" />
+              <input class="input clue-input" id="host-guess-input" placeholder="הניחוש שלך…" aria-label="הניחוש שלך למילה הסודית" maxlength="30" autocomplete="off" />
               <button class="btn btn-primary" id="btn-host-guess-send">נחש</button>
             </div>
             <button class="btn btn-ghost btn-guess-skip" id="btn-host-guess-skip">דלג בלי לנחש</button>
@@ -249,14 +340,23 @@
         <p class="muted" id="player-wait-sub">המנחה יתחיל את המשחק בקרוב. השאירו את המסך פתוח.</p>
         <div class="settings-summary" id="player-settings-summary"></div>
         <div class="mini-players" id="player-lobby-list"></div>
+        <div class="mini-rules">
+          <h3>איך משחקים?</h3>
+          <ol>
+            <li>כולם מקבלים בסוד מילה — חוץ מהמתחזה.</li>
+            <li>בתורות, כל אחד אומר מילה אחת שקשורה למילה. לא קלה מדי, כדי לא לגלות למתחזה!</li>
+            <li>אחרי שני סבבים מצביעים מי המתחזה, והמתחזה מנסה לנחש את המילה.</li>
+          </ol>
+          <p class="muted small">🏅 תפסתם מתחזה: +1 · מתחזה שלא נתפס: +2 · ניחש את המילה: +1</p>
+        </div>
       </div>
 
       <!-- התפקיד שלי -->
       <div id="player-role" class="hidden centered">
         <div class="turn-banner hidden" id="player-turn-banner">
-          <div class="turn-banner-text" id="player-turn-text">🎙️ תורך! אמרו מילה אחת</div>
+          <div class="turn-banner-text" id="player-turn-text" aria-live="polite">🎙️ תורך! אמרו מילה אחת</div>
           <div class="clue-input-row hidden" id="player-clue-row">
-            <input class="input clue-input" id="clue-input" placeholder="מה אמרת? (יוצג לכולם)" maxlength="24" autocomplete="off" />
+            <input class="input clue-input" id="clue-input" placeholder="מה אמרת? (יוצג לכולם)" aria-label="המילה שאמרת" maxlength="24" autocomplete="off" />
             <button class="btn btn-primary" id="btn-clue-send">שלח</button>
           </div>
           <div class="skip-row hidden" id="player-skip-row">
@@ -283,7 +383,7 @@
         <!-- סימון חשודים (צוות) / ניחוש שותפים (מתחזה מרובה) -->
         <div id="player-vote-section" style="width:100%;display:flex;flex-direction:column;align-items:center;gap:16px">
           <p class="muted" id="player-vote-prompt">בחרו את מי אתם חושדים:</p>
-          <ul class="vote-list" id="player-vote-list"></ul>
+          <div class="vote-list" id="player-vote-list" role="group" aria-labelledby="player-vote-prompt"></div>
           <button class="btn btn-primary hidden" id="btn-player-vote-confirm">אשר</button>
           <div id="player-voted-msg" class="hidden voted-msg">✅ ההצבעה נקלטה! מחכים לשאר.</div>
         </div>
@@ -292,7 +392,7 @@
         <div id="player-guess-section" class="guess-section hidden">
           <p class="muted">🕵️ אתה המתחזה — נחש את המילה הסודית:</p>
           <div class="clue-input-row">
-            <input class="input clue-input" id="guess-input" placeholder="הניחוש שלך…" maxlength="30" autocomplete="off" />
+            <input class="input clue-input" id="guess-input" placeholder="הניחוש שלך…" aria-label="הניחוש שלך למילה הסודית" maxlength="30" autocomplete="off" />
             <button class="btn btn-primary" id="btn-guess-send">נחש</button>
           </div>
           <button class="btn btn-ghost btn-guess-skip" id="btn-guess-skip">דלג בלי לנחש</button>
@@ -324,12 +424,14 @@
       </div>
     </section>
 
-  </div>
+  </main>
 
-  <button id="btn-exit" class="exit-btn hidden" title="יציאה מהמשחק">✕</button>
-  <button id="btn-sound" class="sound-btn" title="צלילים ורטט">🔊</button>
+  <button id="btn-exit" class="exit-btn hidden" title="יציאה מהמשחק" aria-label="יציאה מהמשחק">✕</button>
+  <button id="btn-sound" class="sound-btn" title="צלילים ורטט" aria-label="צלילים ורטט" aria-pressed="true">🔊</button>
 
-  <div id="toast" class="toast"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <!-- הודעות לקוראי מסך על מעבר בין שלבי המשחק (לא נראה על המסך) -->
+  <div id="sr-status" class="visually-hidden" role="status" aria-live="polite"></div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/sfx.js"></script>
