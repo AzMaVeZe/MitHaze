@@ -22,6 +22,7 @@ import {
   startRound,
   beginVoting,
   completeTurn,
+  skipDisconnectedTurn,
   addClue,
   submitMarks,
   submitGuess,
@@ -158,6 +159,29 @@ function clientIp(socket) {
   const xff = socket.handshake.headers['x-forwarded-for'];
   if (typeof xff === 'string' && xff) return xff.split(',').pop().trim();
   return socket.handshake.address;
+}
+
+// --- שחקן שהתנתק באמצע סבב ---
+// אם מי שבתור התנתק, או שכולם חוץ ממנו כבר הצביעו, מחכים מעט שיחזור (רענון,
+// מעבר אפליקציה) ואז ממשיכים בלעדיו — כדי שהמשחק לא ייתקע עד שהמנחה ישים לב.
+const STALL_GRACE_MS = Number(process.env.STALL_GRACE_MS) || 20_000;
+function scheduleStallCheck(room) {
+  clearTimeout(room.stallTimer);
+  room.stallTimer = setTimeout(() => {
+    room.stallTimer = null;
+    if (getRoom(room.code) !== room) return;
+    try {
+      if (room.phase === 'reveal' && skipDisconnectedTurn(room)) {
+        broadcastRoom(room);
+      } else if (room.phase === 'vote' && roundComplete(room)) {
+        tallyResults(room);
+        broadcastRoom(room);
+      }
+    } catch (err) {
+      console.error('[stall]', err);
+    }
+  }, STALL_GRACE_MS);
+  room.stallTimer.unref();
 }
 
 // --- לוגיקת סוקטים ---
@@ -475,7 +499,12 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     try {
       const result = markDisconnected(socket.id, socket.data.code);
-      if (result) broadcastRoom(result.room);
+      if (result) {
+        broadcastRoom(result.room);
+        if (result.player && (result.room.phase === 'reveal' || result.room.phase === 'vote')) {
+          scheduleStallCheck(result.room);
+        }
+      }
     } catch (err) {
       console.error('[disconnect]', err);
     }
