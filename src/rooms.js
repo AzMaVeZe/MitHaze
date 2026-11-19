@@ -78,6 +78,7 @@ export function createRoom(settings = {}) {
     round: null,
     roundNumber: 0, // מספר הסבב הנוכחי (עולה בכל התחלת סבב)
     history: [],    // תוצאות לפי סבב: {round, word, outcome, deltas}
+    usedWords: new Set(), // מילים שכבר יצאו בחדר — לא חוזרות עד שהמאגר נגמר
   };
   rooms.set(code, room);
   return room;
@@ -165,14 +166,39 @@ export function canStart(room) {
 }
 
 // מתחיל סבב חדש: בוחר מילה, מגריל מתחזים ומאפס הצבעות.
+// בחירת מתחזים בהגרלה משוקללת: מי שהיה מתחזה בסבב הקודם מקבל חצי סיכוי,
+// ומי שהיה לפני שני סבבים — שלושה רבעים. זה מונע רצפים של אותו מתחזה בלי
+// להפוך את זה לוודאות (שהייתה מסגירה מי בטוח "צוות" בסבב הבא).
+function pickImposters(room, active, count) {
+  const last = new Set(room.history.at(-1)?.imposterIds || []);
+  const before = new Set(room.history.at(-2)?.imposterIds || []);
+  const pool = active.map((p) => ({ id: p.id, w: (last.has(p.id) ? 0.5 : 1) * (before.has(p.id) ? 0.75 : 1) }));
+  const chosen = new Set();
+  for (let i = 0; i < count && pool.length; i++) {
+    const total = pool.reduce((a, x) => a + x.w, 0);
+    let r = randomFloat() * total;
+    let idx = pool.findIndex((x) => (r -= x.w) < 0);
+    if (idx < 0) idx = pool.length - 1;
+    chosen.add(pool[idx].id);
+    pool.splice(idx, 1);
+  }
+  return chosen;
+}
+
+function randomFloat() {
+  return randomInt(2 ** 32) / 2 ** 32;
+}
+
 export function startRound(room) {
   const active = connectedPlayers(room);
-  const { word, categoryName, emoji } = pickWord(room.settings.categoryId);
+  // חפיסת מילים לכל חדר: מילה לא חוזרת באותו ערב עד שהמאגר נגמר
+  const pick = pickWord(room.settings.categoryId, room.usedWords);
+  if (pick.exhausted) room.usedWords.clear();
+  room.usedWords.add(pick.word);
+  const { word, categoryName, emoji } = pick;
 
-  // הגרלת מתחזים (ערבוב הוגן)
-  const shuffled = shuffle(active);
   const imposterCount = Math.max(1, Math.min(room.settings.imposterCount, Math.floor((active.length - 1) / 2)));
-  const imposterIds = new Set(shuffled.slice(0, imposterCount).map((p) => p.id));
+  const imposterIds = pickImposters(room, active, imposterCount);
 
   for (const p of room.players.values()) {
     p.isImposter = imposterIds.has(p.id);
@@ -216,11 +242,31 @@ export const CLUE_CYCLES = 2; // מספר סבבי רמזים לפני מעבר 
 export function completeTurn(room) {
   if (!room.round || room.phase !== 'reveal') return false;
   room.round.turnsDone += 1;
-  if (room.round.turnsDone >= room.round.order.length * CLUE_CYCLES) {
-    beginVoting(room);
-  } else {
-    advanceTurn(room);
+  moveToNextTurn(room);
+  return true;
+}
+
+// מקדם לשחקן המחובר הבא. התור של שחקן מנותק נספר כתור שעבר — כך כולם
+// מקבלים אותו מספר תורות, והסבב לא מתארך בגלל מי שיצא.
+function moveToNextTurn(room) {
+  const r = room.round;
+  const total = r.order.length * CLUE_CYCLES;
+  while (r.turnsDone < total) {
+    r.turnIndex = (r.turnIndex + 1) % r.order.length;
+    const p = room.players.get(r.order[r.turnIndex]);
+    if (p && p.connected) return;
+    r.turnsDone += 1;
   }
+  beginVoting(room);
+}
+
+// השחקן שבתור התנתק ולא חזר — מדלגים עליו (התור שלו נחשב כעבר).
+export function skipDisconnectedTurn(room) {
+  if (!room.round || room.phase !== 'reveal') return false;
+  const cur = room.players.get(room.round.order[room.round.turnIndex]);
+  if (!cur || cur.connected) return false;
+  room.round.turnsDone += 1;
+  moveToNextTurn(room);
   return true;
 }
 
@@ -235,21 +281,6 @@ export function addClue(room, playerId, text) {
   room.round.clues.push({ playerId, text: clue });
   completeTurn(room);
   return true;
-}
-
-// מעביר את תור הרמזים לשחקן הבא (מדלג על מנותקים).
-export function advanceTurn(room) {
-  if (!room.round || room.phase !== 'reveal') return false;
-  const { order } = room.round;
-  for (let step = 1; step <= order.length; step++) {
-    const next = (room.round.turnIndex + step) % order.length;
-    const p = room.players.get(order[next]);
-    if (p && p.connected) {
-      room.round.turnIndex = next;
-      return true;
-    }
-  }
-  return false;
 }
 
 // כמה סימונים נדרשים מהשחקן בשלב ההצבעה:
@@ -278,13 +309,43 @@ export function submitMarks(room, voterId, targets) {
   return true;
 }
 
-// נרמול מילה להשוואת ניחוש: מסיר רווחים מיותרים, גרשיים ופיסוק.
-function normalizeWord(s) {
+// נרמול מילה להשוואת ניחוש בעברית: ניקוד, סימני כיווניות, אותיות סופיות,
+// רווחים ומקפים ופיסוק לא משנים ("אוזן-המן" = "אוזן המן", "שולחנ" = "שולחן").
+const FINALS = { 'ך': 'כ', 'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ' };
+export function normalizeWord(s) {
   return String(s || '')
-    .trim()
-    .replace(/[׳״'"`.,!?־–-]/g, '')
-    .replace(/\s+/g, ' ')
+    .normalize('NFC')
+    .replace(/[\u0591-\u05C7]/g, '')
+    .replace(/[\u200e\u200f\u202a-\u202e]/g, '')
+    .replace(/[ךםןףץ]/g, (c) => FINALS[c])
+    .replace(/[\s׳״'"`.,!?־–\-]/g, '')
     .toLowerCase();
+}
+
+function editDistance(a, b) {
+  if (Math.abs(a.length - b.length) > 1) return 2;
+  const prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let diag = prev[0];
+    prev[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const tmp = prev[j];
+      prev[j] = Math.min(prev[j] + 1, prev[j - 1] + 1, diag + (a[i - 1] === b[j - 1] ? 0 : 1));
+      diag = tmp;
+    }
+  }
+  return prev[b.length];
+}
+
+// ניחוש נחשב נכון גם עם ה"א הידיעה ("הכלב" = "כלב") ועם שגיאת הקלדה אחת במילים של 5 אותיות ומעלה.
+export function guessMatches(guess, word) {
+  const g = normalizeWord(guess);
+  const w = normalizeWord(word);
+  if (!g) return false;
+  if (g === w) return true;
+  const noHe = (x) => (x.length > 2 && x.startsWith('ה') ? x.slice(1) : x);
+  if (noHe(g) === noHe(w)) return true;
+  return w.length >= 5 && editDistance(g, w) <= 1;
 }
 
 // המתחזה מנסה לנחש את המילה (או מדלג עם text=null). ניחוש נכון יזוכה בתוצאות.
@@ -296,7 +357,7 @@ export function submitGuess(room, playerId, text) {
   const raw = str(text, 30);
   player.guess = raw || null;
   player.guessed = true;
-  player.guessCorrect = !!raw && normalizeWord(raw) === normalizeWord(room.round.word);
+  player.guessCorrect = !!raw && guessMatches(raw, room.round.word);
   return true;
 }
 

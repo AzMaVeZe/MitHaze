@@ -461,8 +461,10 @@
     renderClues('host-vote-clues');
     const p = S.pub;
     const roundPlayers = p.players.filter((x) => x.inRound !== false);
-    const done = roundPlayers.filter((x) => x.done).length;
-    const total = roundPlayers.filter((x) => x.connected).length;
+    // סופרים רק מחוברים בשני הצדדים — אחרת שחקן שסיים והתנתק נותן "4 / 3"
+    const connected = roundPlayers.filter((x) => x.connected);
+    const done = connected.filter((x) => x.done).length;
+    const total = connected.length;
     el('host-vote-text').textContent = `${done} / ${total} סיימו`;
     el('host-vote-fill').style.width = total ? `${(done / total) * 100}%` : '0%';
     const grid = el('host-vote-players');

@@ -36,10 +36,12 @@ body {
   overflow-x: hidden;
 }
 
+/* הכפתורים בפינות (יציאה/צליל) יושבים בראש העמוד וגוללים איתו — הריפוד העליון
+   משאיר להם מקום, כך שהם לא מכסים כותרות או את באנר התור */
 #app {
   max-width: 720px;
   margin: 0 auto;
-  padding: 24px 18px 48px;
+  padding: 66px 18px 48px;
   min-height: 100dvh;
 }
 
@@ -279,7 +281,7 @@ select.input { appearance: none; background-image: url("data:image/svg+xml,%3Csv
 
 /* --- כפתור יציאה --- */
 .exit-btn {
-  position: fixed; top: 14px; left: 14px; z-index: 50;
+  position: absolute; top: 14px; left: 14px; z-index: 50;
   width: 40px; height: 40px; border-radius: 50%;
   background: rgba(0,0,0,.35); border: 1px solid var(--card-border);
   color: var(--muted); font-size: 16px; font-family: inherit; cursor: pointer;
@@ -289,7 +291,7 @@ select.input { appearance: none; background-image: url("data:image/svg+xml,%3Csv
 
 /* --- כפתור צליל --- */
 .sound-btn {
-  position: fixed; top: 14px; right: 14px; z-index: 50;
+  position: absolute; top: 14px; right: 14px; z-index: 50;
   width: 40px; height: 40px; border-radius: 50%;
   background: rgba(0,0,0,.35); border: 1px solid var(--card-border);
   font-size: 17px; font-family: inherit; cursor: pointer;

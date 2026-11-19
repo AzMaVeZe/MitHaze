@@ -145,6 +145,9 @@ export const CATEGORIES = [
   },
   {
     id: 'temple',
+    // קטגוריה לנושא מיוחד (תשעה באב): מחוץ ל"הכול מעורבב". מחוץ להקשר, מילים כמו
+    // "תמיד" או "עולה" לא מובנות כמושגים מבית המקדש.
+    inMix: false,
     name: 'בית המקדש',
     emoji: '🕍',
     words: [
@@ -171,14 +174,21 @@ export const CATEGORIES = [
   },
 ];
 
-// בוחר קטגוריה ומילה אקראית. אם ניתן categoryId משתמשים בו, אחרת אקראי.
-export function pickWord(categoryId) {
-  let pool = CATEGORIES;
+// בוחר קטגוריה ומילה אקראית. אם ניתן categoryId משתמשים בו, אחרת מערבבים
+// (רק קטגוריות שלא סומנו inMix:false). excluded — מילים שכבר יצאו בחדר;
+// כשאין יותר מילים חדשות, exhausted=true והמתקשר מתחיל את החפיסה מחדש.
+export function pickWord(categoryId, excluded = new Set()) {
+  let pool = CATEGORIES.filter((c) => c.inMix !== false);
   if (categoryId && categoryId !== 'all') {
     const found = CATEGORIES.find((c) => c.id === categoryId);
     if (found) pool = [found];
   }
-  const category = pool[Math.floor(Math.random() * pool.length)];
-  const word = category.words[Math.floor(Math.random() * category.words.length)];
-  return { word, categoryId: category.id, categoryName: category.name, emoji: category.emoji };
+  const fresh = (c) => c.words.filter((w) => !excluded.has(w));
+  let choices = pool.filter((c) => fresh(c).length > 0);
+  const exhausted = choices.length === 0;
+  if (exhausted) choices = pool;
+  const category = choices[Math.floor(Math.random() * choices.length)];
+  const words = exhausted ? category.words : fresh(category);
+  const word = words[Math.floor(Math.random() * words.length)];
+  return { word, categoryId: category.id, categoryName: category.name, emoji: category.emoji, exhausted };
 }
