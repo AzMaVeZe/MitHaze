@@ -333,3 +333,13 @@ select.input { appearance: none; background-image: url("data:image/svg+xml,%3Csv
 .mini-rules { width: 100%; max-width: 420px; text-align: start; background: rgba(0,0,0,.2); border: 1px solid var(--card-border); border-radius: 16px; padding: 14px 18px; }
 .mini-rules h3 { font-size: 17px; margin-bottom: 8px; }
 .mini-rules ol { padding-inline-start: 20px; display: flex; flex-direction: column; gap: 6px; line-height: 1.5; margin-bottom: 8px; }
+
+/* --- באנר עונתי (דף הבית) --- */
+.season-banner {
+  width: 100%; margin-bottom: 16px; display: flex; align-items: center; gap: 12px;
+  padding: 14px 18px; border-radius: 16px; border: 2px solid var(--accent-3);
+  background: linear-gradient(120deg, rgba(255,212,92,.18), rgba(107,77,255,.25));
+  color: var(--text); font-family: inherit; font-size: 16px; text-align: start; cursor: pointer;
+}
+.season-banner b { color: var(--accent-3); }
+.season-emoji { font-size: 34px; line-height: 1; flex-shrink: 0; }
