@@ -202,7 +202,16 @@
   }
 
   // ---------- בית ----------
+  // באנר עונתי: פותח מסך יצירה עם קטגוריה מוכנה. נעלם מעצמו אחרי חנוכה תשפ"ז (נגמר 12.12.2026).
+  const SEASON = { until: new Date('2026-12-13T00:00:00+02:00'), categoryId: 'chanukah' };
+  if (Date.now() < SEASON.until.getTime()) el('btn-season').classList.remove('hidden');
+  el('btn-season').addEventListener('click', () => {
+    S.pendingCategory = SEASON.categoryId;
+    showScreen('screen-create');
+  });
+
   el('btn-goto-create').addEventListener('click', () => {
+    S.pendingCategory = null;
     showScreen('screen-create');
   });
   el('btn-create-back').addEventListener('click', () => showScreen('screen-home'));
@@ -292,6 +301,7 @@
     const hostName = el('set-hostname').value.trim();
     if (hostPlays && !hostName) return toast('הכניסו את השם שלכם');
     const payload = { hostPlays, hostName };
+    if (S.pendingCategory) payload.categoryId = S.pendingCategory;
     socket.emit('host:create', payload, (res) => {
       if (!res?.ok) return toast(res?.error === 'rate-limited' ? 'יותר מדי חדרים נפתחו. חכו דקה.' : 'שגיאה ביצירת חדר');
       S.role = 'host'; S.code = res.code; S.token = res.hostToken; S.pub = res.state;
